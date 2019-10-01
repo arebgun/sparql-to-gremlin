@@ -26,24 +26,47 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 import org.apache.tinkerpop.gremlin.structure.PropertyType;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
 
+import java.util.UUID;
+import java.util.function.Function;
+
 
 class TraversalBuilder {
-
-    public static GraphTraversal<?, ?> transform(final Triple triple) {
-        final GraphTraversal<Vertex, ?> matchTraversal = __.as(triple.getSubject().getName());
-        
+    
+    public static GraphTraversal<?, ?> transform(final Triple triple, boolean invertEdge) {
+        final Node subject = invertEdge ? triple.getObject() : triple.getSubject();
+        final Node object = invertEdge ? triple.getSubject() : triple.getObject();
         final Node predicate = triple.getPredicate();
         final String uri = predicate.getURI();
         final String uriValue = Prefixes.getURIValue(uri);
         final String prefix = Prefixes.getPrefix(uri);
-
+    
+        GraphTraversal<?, ?> matchTraversal = subject.isConcrete() ?
+            __.as(UUID.randomUUID().toString()).hasId(subject.getLiteralValue()) :
+            __.as(subject.getName());
+        
+        Function<String, GraphTraversal<?, ?>> fn = invertEdge ? matchTraversal::in : matchTraversal::out;
+        
         switch (prefix) {
             case "edge":
-                return matchTraversal.out(uriValue).as(triple.getObject().getName());
+                return object.isConcrete() ?
+                    fn.apply(uriValue).hasId(object.getLiteralValue()) :
+                    fn.apply(uriValue).as(object.getName());
+            case "edge-proposition":
+                if (object.isConcrete()) {
+                    throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
+                } else {
+                    return matchTraversal.outE(uriValue).as(object.getName());
+                }
+            case "edge-proposition-subject":
+                if (object.isConcrete()) {
+                    throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
+                } else {
+                    return matchTraversal.inV().as(object.getName());
+                }
             case "property":
-                return matchProperty(matchTraversal, uriValue, PropertyType.PROPERTY, triple.getObject());
+                return matchProperty(matchTraversal, uriValue, PropertyType.PROPERTY, object);
             case "value":
-                return matchProperty(matchTraversal, uriValue, PropertyType.VALUE, triple.getObject());
+                return matchProperty(matchTraversal, uriValue, PropertyType.VALUE, object);
             default:
                 throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
         }

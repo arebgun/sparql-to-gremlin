@@ -28,14 +28,17 @@ public class Prefixes {
 	public final static String BASE_URI = "http://northwind.com/model/";
    // public final static String BASE_URI = "http://www.tinkerpop.com/traversal/";
 
-    final static List<String> PREFIXES = Arrays.asList("edge", "property", "value");
+    final static List<String> PREFIXES = Arrays.asList("edge", "property", "value", "edge-proposition", "edge-proposition-subject");
+    final static List<String> SHORT_PREFIXES = Arrays.asList("e", "p", "v", "ep", "eps");
 
     final static String PREFIX_DEFINITIONS;
 
     static {
         final StringBuilder builder = new StringBuilder();
-        for (final String prefix : PREFIXES) {
-            builder.append("PREFIX ").append(prefix.substring(0, 1)).append(": <").append(getURI(prefix)).
+        for (int i = 0; i < PREFIXES.size(); ++i) {
+            final String prefix = PREFIXES.get(i);
+            final String shortPrefix = SHORT_PREFIXES.get(i);
+            builder.append("PREFIX ").append(shortPrefix).append(": <").append(getURI(prefix)).
                     append(">").append(System.lineSeparator());
         }
         PREFIX_DEFINITIONS = builder.toString();

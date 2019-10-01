@@ -20,7 +20,9 @@
 package com.datastax.sparql.gremlin;
 
 import java.util.List;
+import java.util.function.Consumer;
 
+import org.apache.jena.datatypes.xsd.XSDDatatype;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.sparql.algebra.op.OpBGP;
 import org.apache.jena.sparql.expr.E_Equals;
@@ -35,44 +37,180 @@ import org.apache.jena.sparql.expr.E_NotEquals;
 import org.apache.jena.sparql.expr.E_NotExists;
 import org.apache.jena.sparql.expr.E_StrLength;
 import org.apache.jena.sparql.expr.Expr;
+import org.apache.jena.sparql.expr.ExprFunction;
+import org.apache.jena.sparql.expr.ExprFunction2;
+import org.apache.jena.sparql.function.Function;
+import org.apache.tinkerpop.gremlin.process.traversal.Compare;
 import org.apache.tinkerpop.gremlin.process.traversal.P;
 import org.apache.tinkerpop.gremlin.process.traversal.Step;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 
 class WhereTraversalBuilder {
-
+    
+//    public static GraphTraversal<?, ?> transformExprFunction2(final ExprFunction2 expression, Function<Object, P<String>> func2) {
+//        String arg1VarName = expression.getArg1().getVarName();
+//        Expr arg2 = expression.getArg2();
+//
+//        if (arg2.isConstant()) {
+//            Object value = arg2.getConstant().getNode().getLiteralValue();
+//            return __.as(arg1VarName).is(func2.apply(value));
+//        } else if (arg2.isVariable()) {
+//            String arg2VarName = arg2.getVarName();
+//            return __.as(arg1VarName).where(arg1VarName, func2.apply(arg2VarName));
+//        } else {
+//            throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
+//        }
+//    }
+    
     public static GraphTraversal<?, ?> transform(final E_Equals expression) {
-    //	System.out.println("The aggr one : "+expression.getArg1().getClass().getName() + "The aggr one :"+expression.getArg2().getClass().getName());
-        final Object value = expression.getArg2().getConstant().getNode().getLiteralValue();
-        return __.as(expression.getArg1().getVarName()).is(P.eq(value));
+//        return transformExprFunction2(expression, (value) -> new P(Compare.eq, value));
+        String arg1VarName = expression.getArg1().getVarName();
+        Expr arg2 = expression.getArg2();
+
+        if (arg2.isConstant()) {
+            Object value = arg2.getConstant().getNode().getLiteralValue();
+            return __.as(arg1VarName).is(P.eq(value));
+        } else if (arg2.isVariable()) {
+            String arg2VarName = arg2.getVarName();
+            return __.as(arg1VarName).where(arg1VarName, P.eq(arg2VarName));
+        } else if (arg2.isFunction()) {
+            ExprFunction fn = arg2.getFunction();
+            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            return __.as(arg1VarName).is(P.eq(value));
+        } else {
+            throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
+        }
     }
 
     public static GraphTraversal<?, ?> transform(final E_NotEquals expression) {
-        final Object value = expression.getArg2().getConstant().getNode().getLiteralValue();
-        return __.as(expression.getArg1().getVarName()).is(P.neq(value));
+        String arg1VarName = expression.getArg1().getVarName();
+        Expr arg2 = expression.getArg2();
+        
+        if (arg2.isConstant()) {
+            Object value = arg2.getConstant().getNode().getLiteralValue();
+            return __.as(arg1VarName).is(P.neq(value));
+        } else if (arg2.isVariable()) {
+            String arg2VarName = arg2.getVarName();
+            return __.as(arg1VarName).where(arg1VarName, P.neq(arg2VarName));
+        } else if (arg2.isFunction()) {
+            ExprFunction fn = arg2.getFunction();
+            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            return __.as(arg1VarName).is(P.neq(value));
+        } else {
+            throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
+        }
     }
 
     public static GraphTraversal<?, ?> transform(final E_LessThan expression) {
-    //	System.out.println("The aggr one : "+expression.getArg1().getClass().getName() + "The aggr one :"+expression.getArg2().getClass().getName());
-    	final Object value = expression.getArg2().getConstant().getNode().getLiteralValue();
-        return __.as(expression.getArg1().getVarName()).is(P.lt(value));
+        String arg1VarName = expression.getArg1().getVarName();
+        Expr arg2 = expression.getArg2();
+    
+        if (arg2.isConstant()) {
+            Object value = arg2.getConstant().getNode().getLiteralValue();
+            return __.as(arg1VarName).is(P.lt(value));
+        } else if (arg2.isVariable()) {
+            String arg2VarName = arg2.getVarName();
+            return __.as(arg1VarName).where(arg1VarName, P.lt(arg2VarName));
+        } else if (arg2.isFunction()) {
+            ExprFunction fn = arg2.getFunction();
+            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            return __.as(arg1VarName).is(P.lt(value));
+        } else {
+            throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
+        }
     }
 
     public static GraphTraversal<?, ?> transform(final E_LessThanOrEqual expression) {
-    //	System.out.println("The aggr one : "+expression.getArg1().getClass().getName() + "The aggr one :"+expression.getArg2().getClass().getName());
-        final Object value = expression.getArg2().getConstant().getNode().getLiteralValue();
-        return __.as(expression.getArg1().getVarName()).is(P.lte(value));
+        String arg1VarName = expression.getArg1().getVarName();
+        Expr arg2 = expression.getArg2();
+    
+        if (arg2.isConstant()) {
+            Object value = arg2.getConstant().getNode().getLiteralValue();
+            return __.as(arg1VarName).is(P.lte(value));
+        } else if (arg2.isVariable()) {
+            String arg2VarName = arg2.getVarName();
+            return __.as(arg1VarName).where(arg1VarName, P.lte(arg2VarName));
+        } else if (arg2.isFunction()) {
+            ExprFunction fn = arg2.getFunction();
+            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            return __.as(arg1VarName).is(P.lte(value));
+        } else {
+            throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
+        }
     }
 
     public static GraphTraversal<?, ?> transform(final E_GreaterThan expression) {
-        final Object value = expression.getArg2().getConstant().getNode().getLiteralValue();
-        return __.as(expression.getArg1().getVarName()).is(P.gt(value));
+        // also handle ( xsd:float(29) > ?VAR2 ) -like expressions
+        Expr arg1 = expression.getArg1();
+        Expr arg2 = expression.getArg2();
+        
+        if (arg1.isVariable()) {
+            return transformArg1Var(expression);
+        } else if (arg2.isVariable()) {
+            return transformArg2Var(expression);
+        } else {
+            throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
+        }
     }
-
+    
+    private static GraphTraversal<?, ?> transformArg2Var(E_GreaterThan expression) {
+        Expr arg1 = expression.getArg1();
+        Expr arg2 = expression.getArg2();
+        String arg2VarName = arg2.getVarName();
+    
+        if (arg1.isConstant()) {
+            Object value = arg1.getConstant().getNode().getLiteralValue();
+            return __.as(arg2VarName).is(P.lt(value));
+        } else if (arg1.isVariable()) {
+            String arg1VarName = arg2.getVarName();
+            return __.as(arg2VarName).where(arg2VarName, P.lt(arg1VarName));
+        } else if (arg1.isFunction()) {
+            ExprFunction fn = arg1.getFunction();
+            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            return __.as(arg2VarName).is(P.lt(value));
+        } else {
+            throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
+        }
+    }
+    
+    private static GraphTraversal<?, ?> transformArg1Var(E_GreaterThan expression) {
+        Expr arg1 = expression.getArg1();
+        Expr arg2 = expression.getArg2();
+        String arg1VarName = arg1.getVarName();
+    
+        if (arg2.isConstant()) {
+            Object value = arg2.getConstant().getNode().getLiteralValue();
+            return __.as(arg1VarName).is(P.gt(value));
+        } else if (arg2.isVariable()) {
+            String arg2VarName = arg2.getVarName();
+            return __.as(arg1VarName).where(arg1VarName, P.gt(arg2VarName));
+        } else if (arg2.isFunction()) {
+            ExprFunction fn = arg2.getFunction();
+            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            return __.as(arg1VarName).is(P.gt(value));
+        } else {
+            throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
+        }
+    }
+    
     public static GraphTraversal<?, ?> transform(final E_GreaterThanOrEqual expression) {
-        final Object value = expression.getArg2().getConstant().getNode().getLiteralValue();
-        return __.as(expression.getArg1().getVarName()).is(P.gte(value));
+        String arg1VarName = expression.getArg1().getVarName();
+        Expr arg2 = expression.getArg2();
+    
+        if (arg2.isConstant()) {
+            Object value = arg2.getConstant().getNode().getLiteralValue();
+            return __.as(arg1VarName).is(P.gte(value));
+        } else if (arg2.isVariable()) {
+            String arg2VarName = arg2.getVarName();
+            return __.as(arg1VarName).where(arg1VarName, P.gte(arg2VarName));
+        } else if (arg2.isFunction()) {
+            ExprFunction fn = arg2.getFunction();
+            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            return __.as(arg1VarName).is(P.gte(value));
+        } else {
+            throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
+        }
     }
 
     public static GraphTraversal<?, ?> transform(final E_LogicalAnd expression) {
@@ -91,7 +229,7 @@ class WhereTraversalBuilder {
         final OpBGP opBGP = (OpBGP) expression.getGraphPattern();
         final List<Triple> triples = opBGP.getPattern().getList();
         if (triples.size() != 1) throw new IllegalStateException("Unhandled EXISTS pattern");
-        final GraphTraversal<?, ?> traversal = TraversalBuilder.transform(triples.get(0));
+        final GraphTraversal<?, ?> traversal = TraversalBuilder.transform(triples.get(0), false);
         final Step endStep = traversal.asAdmin().getEndStep();
         final String label = (String) endStep.getLabels().iterator().next();
         endStep.removeLabel(label);
@@ -103,7 +241,7 @@ class WhereTraversalBuilder {
         final OpBGP opBGP = (OpBGP) expression.getGraphPattern();
         final List<Triple> triples = opBGP.getPattern().getList();
         if (triples.size() != 1) throw new IllegalStateException("Unhandled NOT EXISTS pattern");
-        final GraphTraversal<?, ?> traversal = TraversalBuilder.transform(triples.get(0));
+        final GraphTraversal<?, ?> traversal = TraversalBuilder.transform(triples.get(0), false);
         final Step endStep = traversal.asAdmin().getEndStep();
         final String label = (String) endStep.getLabels().iterator().next();
         endStep.removeLabel(label);
