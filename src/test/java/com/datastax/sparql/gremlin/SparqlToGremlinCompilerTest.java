@@ -44,30 +44,30 @@ public class SparqlToGremlinCompilerTest {
     private Graph modern, crew, gotg;
     private GraphTraversalSource mg, cg, gg;
     private GraphTraversalSource mc, cc;
-    
+
     @Before
     public void setUp() throws Exception {
         gotg = GraphFactory.createGraphOfTheGods();
         gg = gotg.traversal();
     }
-    
+
     @Test
     public void testGotgCommonVertex() {
         String query = "SELECT ?owner ?pet ?hero { ?owner e:pet ?pet . ?hero e:battled ?pet. }";
-        
+
         GraphTraversal expected = gg.V().match(
             __.as("owner").out("pet").as("pet"),
             __.as("pet").in("battled").as("hero")
         ).select("owner", "pet", "hero");
-        
+
         GraphTraversal actual = convertToGremlinTraversal(gotg, query);
-    
+
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
-    
+
         assertEquals(resultExpected, resultActual);
     }
-    
+
     @Test
     public void testGotgPropertiesBeforeEdges() {
         String query =
@@ -77,39 +77,39 @@ public class SparqlToGremlinCompilerTest {
             "  ?CHILD e:father ?FATHER ." +
             "  ?CHILD e:mother ?MOTHER ." +
             "}";
-        
+
         GraphTraversal expected = gg.V().match(
             __.as("CHILD").out("father").as("FATHER"),
             __.as("CHILD").out("mother").as("MOTHER"),
             __.as("FATHER").values("name").as("NAME")
         ).select("NAME", "FATHER", "CHILD", "MOTHER");
-    
+
         GraphTraversal actual = convertToGremlinTraversal(gotg, query);
-    
+
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
-    
+
         assertEquals(resultExpected, resultActual);
     }
-    
+
     @Test
     public void testGotgVarComparison() {
         String query = "SELECT ?X ?Y ?Z { ?X e:battled ?Y . ?X e:battled ?Z . FILTER(?Y != ?Z) }";
-        
+
         GraphTraversal expected = gg.V().match(
             __.as("X").out("battled").as("Y"),
             __.as("X").out("battled").as("Z"),
             __.where("Y", P.neq("Z"))
         ).select("X", "Y", "Z");
-        
+
         GraphTraversal actual = convertToGremlinTraversal(gotg, query);
-    
+
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
-        
+
         assertEquals(resultExpected, resultActual);
     }
-    
+
     @Test
     public void testGotgEdgePropertiesLookup() {
         String query =
@@ -122,7 +122,7 @@ public class SparqlToGremlinCompilerTest {
             "    ?BATTLE  v:time       ?WHEN ;" +
             "             v:place      ?WHERE" +
             "  }";
-        
+
         GraphTraversal expected = gg.V().match(
             __.as("WHO").outE("battled").as("BATTLE"),
             __.as("WHO").values("name").as("HERO"),
@@ -131,151 +131,384 @@ public class SparqlToGremlinCompilerTest {
             __.as("BATTLE").values("time").as("WHEN"),
             __.as("BATTLE").values("place").as("WHERE")
         ).select("HERO", "BADDIE", "WHEN", "WHERE");
-        
+
         GraphTraversal actual = convertToGremlinTraversal(gotg, query);
-    
+
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
-    
+
         assertEquals(resultExpected, resultActual);
     }
-    
+
     @Test
     public void testGotgAskTypeTrue() {
         // is there a father type edge going from vertex id 6 to vertex id 4 - yes
         String query = "ASK WHERE { 6 e:father 4 }";
-        
+
         GraphTraversal expected = gg.V().match(
             __.as(UUID.randomUUID().toString()).hasId(6).out("father").hasId(4)
         );
-        
+
         GraphTraversal actual = convertToGremlinTraversal(gotg, query);
-    
+
         boolean resultExpected = expected.hasNext();
         boolean resultActual = actual.hasNext();
-        
+
         assertTrue(resultExpected);
         assertTrue(resultActual);
     }
-    
+
     @Test
     public void testGotgAskTypeFalse() {
         // is there a father type edge going from vertex id 6 to vertex id 5 - no
         String query = "ASK WHERE { 6 e:father 5 }";
-        
+
         GraphTraversal expected = gg.V().match(
             __.as(UUID.randomUUID().toString()).hasId(6).out("father").hasId(5)
         );
-        
+
         GraphTraversal actual = convertToGremlinTraversal(gotg, query);
-    
+
         boolean resultExpected = expected.hasNext();
         boolean resultActual = actual.hasNext();
-    
+
         assertFalse(resultExpected);
         assertFalse(resultActual);
     }
-    
+
     @Test
     public void testGotgUnoundSubjectBoundObjectPositive() {
         String query = "SELECT ?subj WHERE { ?subj e:battled 9 . }";
-    
+
         GraphTraversal expected = gg.V().match(
             __.as("subj").out("battled").hasId(9)
         ).select("subj");
-    
+
         GraphTraversal actual = convertToGremlinTraversal(gotg, query);
-    
+
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
-    
+
         assertEquals(resultExpected, resultActual);
         assertFalse(resultExpected.isEmpty());
         assertFalse(resultActual.isEmpty());
     }
-    
+
     @Test
     public void testGotgUnoundSubjectBoundObjectNegative() {
         String query = "SELECT ?subj WHERE { ?subj e:battled 1 . }";
-        
+
         GraphTraversal expected = gg.V().match(
             __.as("subj").out("battled").hasId(1)
         ).select("subj");
-        
+
         GraphTraversal actual = convertToGremlinTraversal(gotg, query);
-        
+
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
-        
+
         assertEquals(resultExpected, resultActual);
         assertTrue(resultExpected.isEmpty());
         assertTrue(resultActual.isEmpty());
     }
-    
+
     @Test
     public void testGotgUnoundObjectBoundSubjectPositive() {
         String query = "SELECT ?monster WHERE { 6 e:battled ?monster . }";
-        
+
         GraphTraversal expected = gg.V().match(
             __.as(UUID.randomUUID().toString()).hasId(6).out("battled").as("monster")
         ).select("monster");
-        
+
         GraphTraversal actual = convertToGremlinTraversal(gotg, query);
-        
+
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
-        
+
         assertEquals(resultExpected, resultActual);
         assertFalse(resultExpected.isEmpty());
         assertFalse(resultActual.isEmpty());
     }
-    
+
     @Test
     public void testGotgUnoundObjectBoundSubjectNegative() {
         String query = "SELECT ?monster WHERE { 1 e:battled ?monster . }";
-        
+
         GraphTraversal expected = gg.V().match(
             __.as(UUID.randomUUID().toString()).hasId(1).out("battled").as("monster")
         ).select("monster");
-        
+
         GraphTraversal actual = convertToGremlinTraversal(gotg, query);
-        
+
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
-        
+
         assertEquals(resultExpected, resultActual);
         assertTrue(resultExpected.isEmpty());
         assertTrue(resultActual.isEmpty());
     }
-    
+
     @Test
-    public void testGotgXsdSingleArgFunctions() {
+    public void testGotgComparisonOperatorEquals() {
+        String[] inputs = new String[] { "30", "xsd:float(30)", "xsd:int(30)", "xsd:integer(30)" };
+
+        GraphTraversal expected = gg.V().match(
+            __.as("VAR1").out("father").as("VAR0"),
+            __.as("VAR1").out("mother").as("VAR3"),
+            __.as("VAR1").values("age").as("VAR2"),
+            __.as("VAR2").is(P.eq(30))
+        ).select("VAR0", "VAR1", "VAR2", "VAR3");
+
+        List resultExpected = expected.toList();
+        assertFalse(resultExpected.isEmpty());
+
+        for (String arg2 : inputs) {
+            List resultActual = comparisonTestHelper("=", "?VAR2", arg2);
+
+            assertEquals(resultExpected, resultActual);
+            assertFalse(resultActual.isEmpty());
+        }
+
+        for (String arg1 : inputs) {
+            List resultActual = comparisonTestHelper("=", arg1, "?VAR2");
+
+            assertEquals(resultExpected, resultActual);
+            assertFalse(resultActual.isEmpty());
+        }
+    }
+
+    @Test
+    public void testGotgComparisonOperatorNotEquals() {
+        String[] inputs = new String[] { "30", "xsd:float(30)", "xsd:int(30)", "xsd:integer(30)" };
+
+        GraphTraversal expected = gg.V().match(
+            __.as("VAR1").out("father").as("VAR0"),
+            __.as("VAR1").out("mother").as("VAR3"),
+            __.as("VAR1").values("age").as("VAR2"),
+            __.as("VAR2").is(P.neq(30))
+        ).select("VAR0", "VAR1", "VAR2", "VAR3");
+
+        List resultExpected = expected.toList();
+        assertTrue(resultExpected.isEmpty());
+
+        for (String arg2 : inputs) {
+            List resultActual = comparisonTestHelper("!=", "?VAR2", arg2);
+
+            assertEquals(resultExpected, resultActual);
+            assertTrue(resultActual.isEmpty());
+        }
+
+        for (String arg1 : inputs) {
+            List resultActual = comparisonTestHelper("!=", arg1, "?VAR2");
+
+            assertEquals(resultExpected, resultActual);
+            assertTrue(resultActual.isEmpty());
+        }
+    }
+
+    private List comparisonTestHelper(String comparisonOperator, String arg1, String arg2) {
         String query =
             "SELECT ?VAR0 ?VAR1 ?VAR2 ?VAR3 " +
             "WHERE { " +
             "  ?VAR1 e:father ?VAR0 ." +
             "  ?VAR1 v:age ?VAR2 ." +
-            "  FILTER (?VAR2 > xsd:float(29))" +
+            "  FILTER (" + arg1 + " " + comparisonOperator + " " + arg2 + ")" +
             "  ?VAR1 e:mother ?VAR3 ." +
             "}";
-        
+
+        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+
+        return actual.toList();
+    }
+
+    @Test
+    public void testGotgXsdSingleArgFunctionsGreaterThan() {
+        String[] inputs = new String[] { "29", "xsd:float(29)", "xsd:int(29)", "xsd:integer(29)" };
+
         GraphTraversal expected = gg.V().match(
             __.as("VAR1").out("father").as("VAR0"),
             __.as("VAR1").out("mother").as("VAR3"),
             __.as("VAR1").values("age").as("VAR2"),
             __.as("VAR2").is(P.gt(29))
         ).select("VAR0", "VAR1", "VAR2", "VAR3");
-        
+
+        List resultExpected = expected.toList();
+        assertFalse(resultExpected.isEmpty());
+
+        for (String arg2 : inputs) {
+            List resultActual = comparisonTestHelper(">", "?VAR2", arg2);
+
+            assertEquals(resultExpected, resultActual);
+            assertFalse(resultActual.isEmpty());
+        }
+    }
+
+    @Test
+    public void testGotgXsdSingleArgFunctionsGreaterThanOrEqual() {
+        String[] inputs = new String[] { "29", "xsd:float(30)", "xsd:int(30)", "xsd:integer(30)" };
+
+        GraphTraversal expected = gg.V().match(
+            __.as("VAR1").out("father").as("VAR0"),
+            __.as("VAR1").out("mother").as("VAR3"),
+            __.as("VAR1").values("age").as("VAR2"),
+            __.as("VAR2").is(P.gte(30))
+        ).select("VAR0", "VAR1", "VAR2", "VAR3");
+
+        List resultExpected = expected.toList();
+        assertFalse(resultExpected.isEmpty());
+
+        for (String arg2 : inputs) {
+            List resultActual = comparisonTestHelper(">=", "?VAR2", arg2);
+
+            assertEquals(resultExpected, resultActual);
+            assertFalse(resultActual.isEmpty());
+        }
+    }
+
+    @Test
+    public void testGotgXsdSingleArgFunctionsGreaterThanArgsReversed() {
+        String[] inputs = new String[] { "35", "xsd:float(35)", "xsd:int(35)", "xsd:integer(35)" };
+
+        GraphTraversal expected = gg.V().match(
+            __.as("VAR1").out("father").as("VAR0"),
+            __.as("VAR1").out("mother").as("VAR3"),
+            __.as("VAR1").values("age").as("VAR2"),
+            __.as("VAR2").is(P.lt(35))
+        ).select("VAR0", "VAR1", "VAR2", "VAR3");
+
+        List resultExpected = expected.toList();
+        assertFalse(resultExpected.isEmpty());
+
+        for (String arg1 : inputs) {
+            List resultActual = comparisonTestHelper(">", arg1, "?VAR2");
+
+            assertEquals(resultExpected, resultActual);
+            assertFalse(resultActual.isEmpty());
+        }
+    }
+
+    @Test
+    public void testGotgXsdSingleArgFunctionsGreaterThanOrEqualArgsReversed() {
+        String[] inputs = new String[] { "30", "xsd:float(30)", "xsd:int(30)", "xsd:integer(30)" };
+
+        GraphTraversal expected = gg.V().match(
+            __.as("VAR1").out("father").as("VAR0"),
+            __.as("VAR1").out("mother").as("VAR3"),
+            __.as("VAR1").values("age").as("VAR2"),
+            __.as("VAR2").is(P.lte(30))
+        ).select("VAR0", "VAR1", "VAR2", "VAR3");
+
+        List resultExpected = expected.toList();
+        assertFalse(resultExpected.isEmpty());
+
+        for (String arg1 : inputs) {
+            List resultActual = comparisonTestHelper(">=", arg1, "?VAR2");
+
+            assertEquals(resultExpected, resultActual);
+            assertFalse(resultActual.isEmpty());
+        }
+    }
+
+    @Test
+    public void testGotgXsdSingleArgFunctionsLessThan() {
+        String[] inputs = new String[] { "29", "xsd:float(29)", "xsd:int(29)", "xsd:integer(29)" };
+
+        GraphTraversal expected = gg.V().match(
+            __.as("VAR1").out("father").as("VAR0"),
+            __.as("VAR1").out("mother").as("VAR3"),
+            __.as("VAR1").values("age").as("VAR2"),
+            __.as("VAR2").is(P.gt(29))
+        ).select("VAR0", "VAR1", "VAR2", "VAR3");
+
+        List resultExpected = expected.toList();
+        assertFalse(resultExpected.isEmpty());
+
+        for (String arg1 : inputs) {
+            List resultActual = comparisonTestHelper("<", arg1, "?VAR2");
+
+            assertEquals(resultExpected, resultActual);
+            assertFalse(resultActual.isEmpty());
+        }
+    }
+
+    @Test
+    public void testGotgXsdSingleArgFunctionsLessThanArgsReversed() {
+        String[] inputs = new String[] { "35", "xsd:float(35)", "xsd:int(35)", "xsd:integer(35)" };
+
+        GraphTraversal expected = gg.V().match(
+            __.as("VAR1").out("father").as("VAR0"),
+            __.as("VAR1").out("mother").as("VAR3"),
+            __.as("VAR1").values("age").as("VAR2"),
+            __.as("VAR2").is(P.lt(35))
+        ).select("VAR0", "VAR1", "VAR2", "VAR3");
+
+        List resultExpected = expected.toList();
+        assertFalse(resultExpected.isEmpty());
+
+        for (String arg1 : inputs) {
+            List resultActual = comparisonTestHelper("<", "?VAR2", arg1);
+
+            assertEquals(resultExpected, resultActual);
+            assertFalse(resultActual.isEmpty());
+        }
+    }
+
+    @Test
+    public void testGotgXsdSingleArgFunctionLessThanOrEqual() {
+        String query =
+            "SELECT ?VAR0 ?VAR1 ?VAR2 ?VAR3 " +
+                "WHERE { " +
+                "  ?VAR1 e:father ?VAR0 ." +
+                "  ?VAR1 v:age ?VAR2 ." +
+                "  FILTER (?VAR2 <= xsd:float(30))" +
+                "  ?VAR1 e:mother ?VAR3 ." +
+                "}";
+
+        GraphTraversal expected = gg.V().match(
+            __.as("VAR1").out("father").as("VAR0"),
+            __.as("VAR1").out("mother").as("VAR3"),
+            __.as("VAR1").values("age").as("VAR2"),
+            __.as("VAR2").is(P.lte(30))
+        ).select("VAR0", "VAR1", "VAR2", "VAR3");
+
         GraphTraversal actual = convertToGremlinTraversal(gotg, query);
-    
+
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
-    
+
         assertEquals(resultExpected, resultActual);
         assertFalse(resultExpected.isEmpty());
         assertFalse(resultActual.isEmpty());
     }
-    
+
+    @Test
+    public void testGotgXsdSingleArgFunctionLessThanOrEqualArgsReversed() {
+        String query =
+            "SELECT ?VAR0 ?VAR1 ?VAR2 ?VAR3 " +
+            "WHERE { " +
+            "  ?VAR1 e:father ?VAR0 ." +
+            "  ?VAR1 v:age ?VAR2 ." +
+            "  FILTER (xsd:float(30) <= ?VAR2)" +
+            "  ?VAR1 e:mother ?VAR3 ." +
+            "}";
+
+        GraphTraversal expected = gg.V().match(
+            __.as("VAR1").out("father").as("VAR0"),
+            __.as("VAR1").out("mother").as("VAR3"),
+            __.as("VAR1").values("age").as("VAR2"),
+            __.as("VAR2").is(P.gte(30))
+        ).select("VAR0", "VAR1", "VAR2", "VAR3");
+
+        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+
+        List resultExpected = expected.toList();
+        List resultActual = actual.toList();
+
+        assertEquals(resultExpected, resultActual);
+        assertFalse(resultExpected.isEmpty());
+        assertFalse(resultActual.isEmpty());
+    }
+
     /*
     @Before
     public void setUp() throws Exception {
