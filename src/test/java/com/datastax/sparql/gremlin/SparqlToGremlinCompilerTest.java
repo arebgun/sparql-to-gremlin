@@ -93,13 +93,31 @@ public class SparqlToGremlinCompilerTest {
     }
 
     @Test
-    public void testGotgVarComparison() {
+    public void testGotgNotEqualVarComparison() {
         String query = "SELECT ?X ?Y ?Z { ?X e:battled ?Y . ?X e:battled ?Z . FILTER(?Y != ?Z) }";
 
         GraphTraversal expected = gg.V().match(
             __.as("X").out("battled").as("Y"),
             __.as("X").out("battled").as("Z"),
             __.where("Y", P.neq("Z"))
+        ).select("X", "Y", "Z");
+
+        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+
+        List resultExpected = expected.toList();
+        List resultActual = actual.toList();
+
+        assertEquals(resultExpected, resultActual);
+    }
+
+    @Test
+    public void testGotgEqualVarComparison() {
+        String query = "SELECT ?X ?Y ?Z { ?X e:battled ?Y . ?X e:battled ?Z . FILTER(?Y = ?Z) }";
+
+        GraphTraversal expected = gg.V().match(
+            __.as("X").out("battled").as("Y"),
+            __.as("X").out("battled").as("Z"),
+            __.where("Y", P.eq("Z"))
         ).select("X", "Y", "Z");
 
         GraphTraversal actual = convertToGremlinTraversal(gotg, query);

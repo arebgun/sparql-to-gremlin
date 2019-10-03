@@ -46,7 +46,6 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 import org.apache.tinkerpop.gremlin.structure.Graph;
-import org.apache.tinkerpop.gremlin.structure.PropertyType;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
 
 import java.util.ArrayList;
@@ -65,8 +64,8 @@ public class SparqlToGremlinCompiler extends OpVisitorBase {
 
 	List<Traversal> traversalList = new ArrayList<Traversal>();
 	List<Traversal> optionalTraversals = new ArrayList<Traversal>();
-	List<String> optionalVariable = new ArrayList<String>(); 
-	
+	List<String> optionalVariable = new ArrayList<String>();
+
 	boolean optionalFlag = false;
 
 	String groupVariable = "";
@@ -239,7 +238,7 @@ public class SparqlToGremlinCompiler extends OpVisitorBase {
 
 				break;
 			}
-			
+
 		}
 
 		if (query.hasGroupBy()) {
@@ -329,20 +328,20 @@ public class SparqlToGremlinCompiler extends OpVisitorBase {
 
 	public static GraphTraversal<Vertex, ?> convertToGremlinTraversal(final Graph graph, final String query) {
 		if (query.contains("?x") && query.contains("?y") && query.contains("?z")) {
-      return graph.traversal().V().outE().inV().path().by(__.valueMap());
-    }
-		
-    String pquery = Prefixes.prepend(query);
-    ParameterizedSparqlString pss = new ParameterizedSparqlString(pquery, PrefixMapping.Standard);
-    Query q = QueryFactory.create(pss.toString(), Syntax.syntaxSPARQL);
-		return convertToGremlinTraversal(graph.traversal(), q);
+            return graph.traversal().V().outE().inV().path().by(__.valueMap());
+        }
+
+        String pquery = Prefixes.prepend(query);
+        ParameterizedSparqlString pss = new ParameterizedSparqlString(pquery, PrefixMapping.Standard);
+        Query q = QueryFactory.create(pss.toString(), Syntax.syntaxSPARQL);
+        return convertToGremlinTraversal(graph.traversal(), q);
 	}
 
 	public static GraphTraversal<Vertex, ?> convertToGremlinTraversal(final GraphTraversalSource g, final String query) {
-    String pquery = Prefixes.prepend(query);
-    ParameterizedSparqlString pss = new ParameterizedSparqlString(pquery, PrefixMapping.Standard);
-    Query q = QueryFactory.create(pss.toString(), Syntax.syntaxSPARQL);
-    return convertToGremlinTraversal(g, q);
+        String pquery = Prefixes.prepend(query);
+        ParameterizedSparqlString pss = new ParameterizedSparqlString(pquery, PrefixMapping.Standard);
+        Query q = QueryFactory.create(pss.toString(), Syntax.syntaxSPARQL);
+        return convertToGremlinTraversal(g, q);
 	}
 
 	// VISITING SPARQL ALGEBRA OP BASIC TRIPLE PATTERNS - MAYBE
@@ -372,19 +371,19 @@ public class SparqlToGremlinCompiler extends OpVisitorBase {
 		}
 
 	}
-  
+
   private List<Triple> reorderTriplesWrtProperties(List<Triple> triples) {
     List<Triple> edges = new ArrayList<>();
     List<Triple> propsAndValues = new ArrayList<>();
-    
+
     for (Triple t : triples) {
       Node predicate = t.getPredicate();
-      
+
       if (predicate.isURI()) {
         final String uri = predicate.getURI();
         final String uriValue = Prefixes.getURIValue(uri);
         final String prefix = Prefixes.getPrefix(uri);
-  
+
         switch (prefix) {
           case "edge":
           case "edge-proposition":
@@ -404,20 +403,20 @@ public class SparqlToGremlinCompiler extends OpVisitorBase {
     }
     return Stream.concat(edges.stream(), propsAndValues.stream()).collect(Collectors.toList());
   }
-  
+
   private boolean tripleRequiresEdgeInversion(Triple triple, Set<Node> visitedNodes) {
 		Node predicate = triple.getPredicate();
-		
+
 		if (predicate.isURI()) {
       String uri = predicate.getURI();
       String prefix = Prefixes.getPrefix(uri);
-      
+
       // ?X pred ?Y
       // ?Z pred ?Y
       if (prefix.equalsIgnoreCase("edge")) {
         Node subject = triple.getSubject();
         Node object = triple.getObject();
-        
+
         if (visitedNodes.isEmpty()) {
           visitedNodes.add(subject);
           visitedNodes.add(object);
@@ -430,29 +429,11 @@ public class SparqlToGremlinCompiler extends OpVisitorBase {
           return true;
         }
       }
-//		else if (prefix.equalsIgnoreCase("value")) {
-//      Node subject = triple.getSubject();
-//      Node object = triple.getObject();
-//
-//      if (subject.isLiteral()) {
-//        visitedNodes.add(object);
-//        return true;
-//      }
-//    }
     }
-		
+
 		return false;
 	}
-	
-	private List<Triple> annotateSparqlTriples(List<Triple> triples) {
-		List<Triple> result = new ArrayList<>(triples.size());
-		
-		for (Triple t : triples) {
-		}
-		
-		return result;
-	}
-	
+
 	// VISITING SPARQL ALGEBRA OP FILTER - MAYBE
 	@Override
 	public void visit(final OpFilter opFilter) {
