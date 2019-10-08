@@ -370,69 +370,72 @@ public class SparqlToGremlinCompiler extends OpVisitorBase {
 
 		}
 
-	}
-
-  private List<Triple> reorderTriplesWrtProperties(List<Triple> triples) {
-    List<Triple> edges = new ArrayList<>();
-    List<Triple> propsAndValues = new ArrayList<>();
-
-    for (Triple t : triples) {
-      Node predicate = t.getPredicate();
-
-      if (predicate.isURI()) {
-        final String uri = predicate.getURI();
-        final String uriValue = Prefixes.getURIValue(uri);
-        final String prefix = Prefixes.getPrefix(uri);
-
-        switch (prefix) {
-          case "edge":
-          case "edge-proposition":
-          case "edge-proposition-subject":
-            edges.add(t);
-            break;
-          case "property":
-          case "value":
-            propsAndValues.add(t);
-            break;
-          default:
-            throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
-        }
-      } else {
-        edges.add(t);
-      }
-    }
-    return Stream.concat(edges.stream(), propsAndValues.stream()).collect(Collectors.toList());
-  }
-
-  private boolean tripleRequiresEdgeInversion(Triple triple, Set<Node> visitedNodes) {
-		Node predicate = triple.getPredicate();
-
-		if (predicate.isURI()) {
-      String uri = predicate.getURI();
-      String prefix = Prefixes.getPrefix(uri);
-
-      // ?X pred ?Y
-      // ?Z pred ?Y
-      if (prefix.equalsIgnoreCase("edge")) {
-        Node subject = triple.getSubject();
-        Node object = triple.getObject();
-
-        if (visitedNodes.isEmpty()) {
-          visitedNodes.add(subject);
-          visitedNodes.add(object);
-          return false;
-        } else if (visitedNodes.contains(subject)) {
-          visitedNodes.add(object);
-          return false;
-        } else {
-          visitedNodes.add(subject);
-          return true;
-        }
-      }
     }
 
-		return false;
-	}
+    private List<Triple> reorderTriplesWrtProperties(List<Triple> triples) {
+        List<Triple> edges = new ArrayList<>();
+        List<Triple> eps = new ArrayList<>();
+        List<Triple> propsAndValues = new ArrayList<>();
+
+        for (Triple t : triples) {
+            Node predicate = t.getPredicate();
+
+            if (predicate.isURI()) {
+                final String uri = predicate.getURI();
+                final String uriValue = Prefixes.getURIValue(uri);
+                final String prefix = Prefixes.getPrefix(uri);
+
+                switch (prefix) {
+                    case "edge":
+                    case "edge-proposition":
+                        edges.add(t);
+                        break;
+                    case "edge-proposition-subject":
+                        eps.add(t);
+                        break;
+                    case "property":
+                    case "value":
+                        propsAndValues.add(t);
+                        break;
+                    default:
+                        throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
+                }
+            } else {
+                edges.add(t);
+            }
+        }
+        return Stream.concat(Stream.concat(edges.stream(), eps.stream()), propsAndValues.stream()).collect(Collectors.toList());
+    }
+
+    private boolean tripleRequiresEdgeInversion(Triple triple, Set<Node> visitedNodes) {
+        Node predicate = triple.getPredicate();
+
+        if (predicate.isURI()) {
+            String uri = predicate.getURI();
+            String prefix = Prefixes.getPrefix(uri);
+
+            // ?X pred ?Y
+            // ?Z pred ?Y
+            if (prefix.equalsIgnoreCase("edge")) {
+                Node subject = triple.getSubject();
+                Node object = triple.getObject();
+
+                if (visitedNodes.isEmpty()) {
+                    visitedNodes.add(subject);
+                    visitedNodes.add(object);
+                    return false;
+                } else if (visitedNodes.contains(subject)) {
+                    visitedNodes.add(object);
+                    return false;
+                } else {
+                    visitedNodes.add(subject);
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
 	// VISITING SPARQL ALGEBRA OP FILTER - MAYBE
 	@Override

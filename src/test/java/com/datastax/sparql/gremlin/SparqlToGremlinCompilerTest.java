@@ -159,6 +159,36 @@ public class SparqlToGremlinCompilerTest {
     }
 
     @Test
+    public void testGotgEdgePropertiesLookupReordered() {
+        String query =
+            "SELECT  ?HERO ?BADDIE ?WHEN ?WHERE " +
+                "WHERE " +
+                "  { ?BATTLE  eps:battled  ?FOE ." +
+                "    ?WHO     ep:battled   ?BATTLE ;" +
+                "             v:name       ?HERO ." +
+                "    ?FOE     v:name       ?BADDIE ." +
+                "    ?BATTLE  v:time       ?WHEN ;" +
+                "             v:place      ?WHERE" +
+                "  }";
+
+        GraphTraversal expected = gg.V().match(
+            __.as("WHO").outE("battled").as("BATTLE"),
+            __.as("WHO").values("name").as("HERO"),
+            __.as("BATTLE").inV().as("FOE"),
+            __.as("FOE").values("name").as("BADDIE"),
+            __.as("BATTLE").values("time").as("WHEN"),
+            __.as("BATTLE").values("place").as("WHERE")
+        ).select("HERO", "BADDIE", "WHEN", "WHERE");
+
+        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+
+        List resultExpected = expected.toList();
+        List resultActual = actual.toList();
+
+        assertEquals(resultExpected, resultActual);
+    }
+
+    @Test
     public void testGotgAskTypeTrue() {
         // is there a father type edge going from vertex id 6 to vertex id 4 - yes
         String query = "ASK WHERE { 6 e:father 4 }";
