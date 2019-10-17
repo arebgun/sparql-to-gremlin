@@ -24,15 +24,15 @@ import org.apache.jena.graph.Triple;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 import org.apache.tinkerpop.gremlin.structure.PropertyType;
-import org.apache.tinkerpop.gremlin.structure.Vertex;
 
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 
 
 class TraversalBuilder {
     
-    public static GraphTraversal<?, ?> transform(final Triple triple, boolean invertEdge) {
+    public static GraphTraversal<?, ?> transform(final Triple triple, boolean invertEdge, Map<Object, UUID> vertexIdToUuid) {
         final Node subject = invertEdge ? triple.getObject() : triple.getSubject();
         final Node object = invertEdge ? triple.getSubject() : triple.getObject();
         final Node predicate = triple.getPredicate();
@@ -40,17 +40,53 @@ class TraversalBuilder {
         final String uriValue = Prefixes.getURIValue(uri);
         final String prefix = Prefixes.getPrefix(uri);
     
-        GraphTraversal<?, ?> matchTraversal = subject.isConcrete() ?
-            __.as(UUID.randomUUID().toString()).hasId(subject.getLiteralValue()) :
-            __.as(subject.getName());
-        
+        Object subjectValue;
+
+        if (subject.isURI()) {
+            String subjectUri = subject.getURI();
+
+            if (!Prefixes.isValidVertexIdUri(subjectUri)) {
+                throw new IllegalStateException(String.format("Unexpected object URI: %s", subjectUri));
+            }
+
+            subjectValue = Prefixes.getURIValue(subjectUri);
+        } else if (subject.isLiteral()) {
+            subjectValue = subject.getLiteralValue();
+        } else if (subject.isVariable()) {
+            subjectValue = subject.getName();
+        } else {
+            throw new IllegalStateException(String.format("Unexpected subject type: %s", subject));
+        }
+
+        GraphTraversal<?, ?> matchTraversal;
+
+        if (subject.isConcrete()) {
+            UUID uuid = vertexIdToUuid.computeIfAbsent(subjectValue, v -> UUID.randomUUID());
+            matchTraversal = __.as(uuid.toString()).hasId(subjectValue);
+        } else {
+            matchTraversal = __.as(subjectValue.toString());
+        }
+
         Function<String, GraphTraversal<?, ?>> fn = invertEdge ? matchTraversal::in : matchTraversal::out;
         
         switch (prefix) {
             case "edge":
-                return object.isConcrete() ?
-                    fn.apply(uriValue).hasId(object.getLiteralValue()) :
-                    fn.apply(uriValue).as(object.getName());
+                if (object.isURI()) {
+                    String objectUri = object.getURI();
+
+                    if (!Prefixes.isValidVertexIdUri(objectUri)) {
+                        throw new IllegalStateException(String.format("Unexpected object URI: %s", objectUri));
+                    }
+
+                    String objectValue = Prefixes.getURIValue(objectUri);
+                    return fn.apply(uriValue).hasId(objectValue);
+                } else if (object.isLiteral()) {
+                    return fn.apply(uriValue).hasId(object.getLiteralValue());
+                } else if (object.isVariable()) {
+                    return fn.apply(uriValue).as(object.getName());
+                } else {
+                    throw new IllegalStateException(String.format("Unexpected object type: %s", object));
+                }
             case "edge-proposition":
                 if (object.isConcrete()) {
                     throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));

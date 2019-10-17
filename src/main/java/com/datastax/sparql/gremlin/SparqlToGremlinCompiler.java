@@ -50,9 +50,12 @@ import org.apache.tinkerpop.gremlin.structure.Vertex;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -65,8 +68,9 @@ public class SparqlToGremlinCompiler extends OpVisitorBase {
 	List<Traversal> traversalList = new ArrayList<Traversal>();
 	List<Traversal> optionalTraversals = new ArrayList<Traversal>();
 	List<String> optionalVariable = new ArrayList<String>();
+    Map<Object, UUID> vertexIdToUuid = new HashMap<>();
 
-	boolean optionalFlag = false;
+    boolean optionalFlag = false;
 
 	String groupVariable = "";
 	int sortingDirection = 0;
@@ -357,7 +361,7 @@ public class SparqlToGremlinCompiler extends OpVisitorBase {
 			int i = 0;
 			for (final Triple triple : triples) {
 				boolean invertEdge = tripleRequiresEdgeInversion(triple, visitedNodes);
-				matchTraversals[i++] = TraversalBuilder.transform(triple, invertEdge);
+				matchTraversals[i++] = TraversalBuilder.transform(triple, invertEdge, vertexIdToUuid);
 				if (optionalFlag) {
 					optionalTraversals.add(matchTraversals[i - 1]);
 					optionalVariable.add(triple.getObject().toString());
@@ -445,7 +449,7 @@ public class SparqlToGremlinCompiler extends OpVisitorBase {
 		Traversal traversal = null;
 		for (Expr expr : opFilter.getExprs().getList()) {
 			if (expr != null) {
-				traversal = __.where(WhereTraversalBuilder.transform(expr));
+				traversal = __.where(WhereTraversalBuilder.transform(expr, vertexIdToUuid));
 				traversalList.add(traversal);
 			}
 		}
@@ -468,7 +472,7 @@ public class SparqlToGremlinCompiler extends OpVisitorBase {
 		if (opLeftJoin.getExprs() != null) {
 			for (Expr expr : opLeftJoin.getExprs().getList()) {
 				if (expr != null) {
-					optTraversal = __.where(WhereTraversalBuilder.transform(expr));
+					optTraversal = __.where(WhereTraversalBuilder.transform(expr, vertexIdToUuid));
 					System.out.println("Visiting optional filter=============");
 					if (optionalFlag)
 						optionalTraversals.add(optTraversal);

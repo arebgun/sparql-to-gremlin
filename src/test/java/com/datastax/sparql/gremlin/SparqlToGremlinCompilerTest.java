@@ -159,6 +159,37 @@ public class SparqlToGremlinCompilerTest {
     }
 
     @Test
+    public void testGotgEdgePropertiesLookupConcrete() {
+        String query =
+            "PREFIX vid: <http://northwind.com/model/vertex-id#> " +
+            "SELECT ?HERO ?BADDIE ?WHEN ?WHERE " +
+            "WHERE " +
+            "  { vid:6    ep:battled   ?BATTLE ;" +
+            "             v:name       ?HERO ." +
+            "    ?BATTLE  eps:battled  ?FOE ." +
+            "    ?FOE     v:name       ?BADDIE ." +
+            "    ?BATTLE  v:time       ?WHEN ;" +
+            "             v:place      ?WHERE" +
+            "  }";
+
+        GraphTraversal expected = gg.V().match(
+            __.as("RANDOM_UUID").hasId(6).outE("battled").as("BATTLE"),
+            __.as("RANDOM_UUID").values("name").as("HERO"),
+            __.as("BATTLE").inV().as("FOE"),
+            __.as("FOE").values("name").as("BADDIE"),
+            __.as("BATTLE").values("time").as("WHEN"),
+            __.as("BATTLE").values("place").as("WHERE")
+        ).select("HERO", "BADDIE", "WHEN", "WHERE");
+
+        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+
+        List resultExpected = expected.toList();
+        List resultActual = actual.toList();
+
+        assertEquals(resultExpected, resultActual);
+    }
+
+    @Test
     public void testGotgEdgePropertiesLookupReordered() {
         String query =
             "SELECT  ?HERO ?BADDIE ?WHEN ?WHERE " +
@@ -207,9 +238,49 @@ public class SparqlToGremlinCompilerTest {
     }
 
     @Test
+    public void testGotgAskTypeTrueUriPrefixed() {
+        // is there a father type edge going from vertex id 6 to vertex id 4 - yes
+        String query =
+            "PREFIX vid: <http://northwind.com/model/vertex-id#> " +
+            "ASK WHERE { vid:6 e:father vid:4 }";
+
+        GraphTraversal expected = gg.V().match(
+            __.as(UUID.randomUUID().toString()).hasId(6).out("father").hasId(4)
+        );
+
+        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+
+        boolean resultExpected = expected.hasNext();
+        boolean resultActual = actual.hasNext();
+
+        assertTrue(resultExpected);
+        assertTrue(resultActual);
+    }
+
+    @Test
     public void testGotgAskTypeFalse() {
         // is there a father type edge going from vertex id 6 to vertex id 5 - no
         String query = "ASK WHERE { 6 e:father 5 }";
+
+        GraphTraversal expected = gg.V().match(
+            __.as(UUID.randomUUID().toString()).hasId(6).out("father").hasId(5)
+        );
+
+        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+
+        boolean resultExpected = expected.hasNext();
+        boolean resultActual = actual.hasNext();
+
+        assertFalse(resultExpected);
+        assertFalse(resultActual);
+    }
+
+    @Test
+    public void testGotgAskTypeFalseUriPrefixed() {
+        // is there a father type edge going from vertex id 6 to vertex id 5 - no
+        String query =
+            "PREFIX vid: <http://northwind.com/model/vertex-id#> " +
+            "ASK WHERE { vid:6 e:father vid:5 }";
 
         GraphTraversal expected = gg.V().match(
             __.as(UUID.randomUUID().toString()).hasId(6).out("father").hasId(5)
@@ -261,8 +332,85 @@ public class SparqlToGremlinCompilerTest {
     }
 
     @Test
+    public void testGotgUnoundSubjectBoundObjectUriNegative() {
+        String query = "SELECT ?subj WHERE { ?subj e:battled <http://northwind.com/model/vertex-id#1> . }";
+
+        GraphTraversal expected = gg.V().match(
+            __.as("subj").out("battled").hasId(1)
+        ).select("subj");
+
+        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+
+        List resultExpected = expected.toList();
+        List resultActual = actual.toList();
+
+        assertEquals(resultExpected, resultActual);
+        assertTrue(resultExpected.isEmpty());
+        assertTrue(resultActual.isEmpty());
+    }
+
+    @Test
+    public void testGotgUnoundSubjectBoundObjectUriPrefixedNegative() {
+        String query =
+            "PREFIX vid: <http://northwind.com/model/vertex-id#> " +
+            "SELECT ?subj " +
+            "WHERE { ?subj e:battled vid:1 . }";
+
+        GraphTraversal expected = gg.V().match(
+            __.as("subj").out("battled").hasId(1)
+        ).select("subj");
+
+        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+
+        List resultExpected = expected.toList();
+        List resultActual = actual.toList();
+
+        assertEquals(resultExpected, resultActual);
+        assertTrue(resultExpected.isEmpty());
+        assertTrue(resultActual.isEmpty());
+    }
+
+    @Test
     public void testGotgUnoundObjectBoundSubjectPositive() {
         String query = "SELECT ?monster WHERE { 6 e:battled ?monster . }";
+
+        GraphTraversal expected = gg.V().match(
+            __.as(UUID.randomUUID().toString()).hasId(6).out("battled").as("monster")
+        ).select("monster");
+
+        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+
+        List resultExpected = expected.toList();
+        List resultActual = actual.toList();
+
+        assertEquals(resultExpected, resultActual);
+        assertFalse(resultExpected.isEmpty());
+        assertFalse(resultActual.isEmpty());
+    }
+
+    @Test
+    public void testGotgUnoundObjectBoundSubjectUriPositive() {
+        String query = "SELECT ?monster WHERE { <http://northwind.com/model/vertex-id#6> e:battled ?monster . }";
+
+        GraphTraversal expected = gg.V().match(
+            __.as(UUID.randomUUID().toString()).hasId(6).out("battled").as("monster")
+        ).select("monster");
+
+        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+
+        List resultExpected = expected.toList();
+        List resultActual = actual.toList();
+
+        assertEquals(resultExpected, resultActual);
+        assertFalse(resultExpected.isEmpty());
+        assertFalse(resultActual.isEmpty());
+    }
+
+    @Test
+    public void testGotgUnoundObjectBoundSubjectUriPrefixedPositive() {
+        String query =
+            "PREFIX vid: <http://northwind.com/model/vertex-id#> " +
+            "SELECT ?monster WHERE { vid:6 e:battled ?monster . }";
 
         GraphTraversal expected = gg.V().match(
             __.as(UUID.randomUUID().toString()).hasId(6).out("battled").as("monster")

@@ -19,17 +19,22 @@
 
 package com.datastax.sparql.gremlin;
 
+import org.apache.xerces.util.URI;
+
 import java.util.Arrays;
 import java.util.List;
 
 
 public class Prefixes {
 
-	public final static String BASE_URI = "http://northwind.com/model/";
+    private final static String BASE_URI_SCHEME = "http";
+    private final static String BASE_URI_HOST = "northwind.com";
+
+	public final static String BASE_URI = String.format("%s://%s/model/", BASE_URI_SCHEME, BASE_URI_HOST);
    // public final static String BASE_URI = "http://www.tinkerpop.com/traversal/";
 
-    final static List<String> PREFIXES = Arrays.asList("edge", "property", "value", "edge-proposition", "edge-proposition-subject");
-    final static List<String> SHORT_PREFIXES = Arrays.asList("e", "p", "v", "ep", "eps");
+    final static List<String> PREFIXES = Arrays.asList("edge", "property", "value", "edge-proposition", "edge-proposition-subject", "vertex-id");
+    final static List<String> SHORT_PREFIXES = Arrays.asList("e", "p", "v", "ep", "eps", "vid");
 
     final static String PREFIX_DEFINITIONS;
 
@@ -63,5 +68,23 @@ public class Prefixes {
 
     public static StringBuilder prepend(final StringBuilder scriptBuilder) {
         return scriptBuilder.insert(0, PREFIX_DEFINITIONS);
+    }
+
+    public static boolean isValidVertexIdUri(String uriStr) {
+        try {
+            URI objectURI = new URI(uriStr);
+            String objectPrefixHost = objectURI.getHost();
+            String objectPrefixPath = objectURI.getPath();
+
+            return
+                objectPrefixHost.equalsIgnoreCase(BASE_URI_HOST) &&
+                objectPrefixPath.equalsIgnoreCase("/model/vertex-id");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static String createVertexIdUri(String vertexId) {
+        return BASE_URI + "vertex-id#" + vertexId;
     }
 }

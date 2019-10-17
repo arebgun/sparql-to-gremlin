@@ -20,9 +20,9 @@
 package com.datastax.sparql.gremlin;
 
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.Map;
+import java.util.UUID;
 
-import org.apache.jena.datatypes.xsd.XSDDatatype;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.sparql.algebra.op.OpBGP;
 import org.apache.jena.sparql.expr.E_Equals;
@@ -38,9 +38,6 @@ import org.apache.jena.sparql.expr.E_NotExists;
 import org.apache.jena.sparql.expr.E_StrLength;
 import org.apache.jena.sparql.expr.Expr;
 import org.apache.jena.sparql.expr.ExprFunction;
-import org.apache.jena.sparql.expr.ExprFunction2;
-import org.apache.jena.sparql.function.Function;
-import org.apache.tinkerpop.gremlin.process.traversal.Compare;
 import org.apache.tinkerpop.gremlin.process.traversal.P;
 import org.apache.tinkerpop.gremlin.process.traversal.Step;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
@@ -369,23 +366,23 @@ class WhereTraversalBuilder {
         }
     }
 
-    public static GraphTraversal<?, ?> transform(final E_LogicalAnd expression) {
+    public static GraphTraversal<?, ?> transform(final E_LogicalAnd expression, Map<Object, UUID> vertexIdToUuid) {
         return __.and(
-            transform(expression.getArg1()),
-            transform(expression.getArg2()));
+            transform(expression.getArg1(), vertexIdToUuid),
+            transform(expression.getArg2(), vertexIdToUuid));
     }
 
-    public static GraphTraversal<?, ?> transform(final E_LogicalOr expression) {
+    public static GraphTraversal<?, ?> transform(final E_LogicalOr expression, Map<Object, UUID> vertexIdToUuid) {
         return __.or(
-            transform(expression.getArg1()),
-            transform(expression.getArg2()));
+            transform(expression.getArg1(), vertexIdToUuid),
+            transform(expression.getArg2(), vertexIdToUuid));
     }
 
-    public static GraphTraversal<?, ?> transform(final E_Exists expression) {
+    public static GraphTraversal<?, ?> transform(final E_Exists expression, Map<Object, UUID> vertexIdToUuid) {
         final OpBGP opBGP = (OpBGP) expression.getGraphPattern();
         final List<Triple> triples = opBGP.getPattern().getList();
         if (triples.size() != 1) throw new IllegalStateException("Unhandled EXISTS pattern");
-        final GraphTraversal<?, ?> traversal = TraversalBuilder.transform(triples.get(0), false);
+        final GraphTraversal<?, ?> traversal = TraversalBuilder.transform(triples.get(0), false, vertexIdToUuid);
         final Step endStep = traversal.asAdmin().getEndStep();
         final String label = (String) endStep.getLabels().iterator().next();
         endStep.removeLabel(label);
@@ -393,11 +390,11 @@ class WhereTraversalBuilder {
     }
 
 
-    public static GraphTraversal<?, ?> transform(final E_NotExists expression) {
+    public static GraphTraversal<?, ?> transform(final E_NotExists expression, Map<Object, UUID> vertexIdToUuid) {
         final OpBGP opBGP = (OpBGP) expression.getGraphPattern();
         final List<Triple> triples = opBGP.getPattern().getList();
         if (triples.size() != 1) throw new IllegalStateException("Unhandled NOT EXISTS pattern");
-        final GraphTraversal<?, ?> traversal = TraversalBuilder.transform(triples.get(0), false);
+        final GraphTraversal<?, ?> traversal = TraversalBuilder.transform(triples.get(0), false, vertexIdToUuid);
         final Step endStep = traversal.asAdmin().getEndStep();
         final String label = (String) endStep.getLabels().iterator().next();
         endStep.removeLabel(label);
@@ -412,17 +409,17 @@ class WhereTraversalBuilder {
 
 
     //what does <?, ?> signify? possibly <S,E>
-    public static GraphTraversal<?, ?> transform(final Expr expression) {
+    public static GraphTraversal<?, ?> transform(final Expr expression, Map<Object, UUID> vertexIdToUuid) {
         if (expression instanceof E_Equals) return transform((E_Equals) expression);
         if (expression instanceof E_NotEquals) return transform((E_NotEquals) expression);
         if (expression instanceof E_LessThan) return transform((E_LessThan) expression);
         if (expression instanceof E_LessThanOrEqual) return transform((E_LessThanOrEqual) expression);
         if (expression instanceof E_GreaterThan) return transform((E_GreaterThan) expression);
         if (expression instanceof E_GreaterThanOrEqual) return transform((E_GreaterThanOrEqual) expression);
-        if (expression instanceof E_LogicalAnd) return transform((E_LogicalAnd) expression);
-        if (expression instanceof E_LogicalOr) return transform((E_LogicalOr) expression);
-        if (expression instanceof E_Exists) return transform((E_Exists) expression);
-        if (expression instanceof E_NotExists) return transform((E_NotExists) expression);
+        if (expression instanceof E_LogicalAnd) return transform((E_LogicalAnd) expression, vertexIdToUuid);
+        if (expression instanceof E_LogicalOr) return transform((E_LogicalOr) expression, vertexIdToUuid);
+        if (expression instanceof E_Exists) return transform((E_Exists) expression, vertexIdToUuid);
+        if (expression instanceof E_NotExists) return transform((E_NotExists) expression, vertexIdToUuid);
         throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
     }
 }
