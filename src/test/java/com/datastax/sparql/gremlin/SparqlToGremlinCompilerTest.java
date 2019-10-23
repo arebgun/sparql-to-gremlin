@@ -19,25 +19,24 @@
 
 package com.datastax.sparql.gremlin;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.UUID;
-
 import com.datastax.sparql.graph.GraphFactory;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.jena.sparql.ARQConstants;
 import org.apache.tinkerpop.gremlin.process.traversal.P;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 import org.apache.tinkerpop.gremlin.structure.Graph;
-import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerFactory;
 import org.junit.Before;
+import org.junit.Test;
+
+import java.util.List;
+import java.util.UUID;
 
 import static com.datastax.sparql.gremlin.SparqlToGremlinCompiler.convertToGremlinTraversal;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import org.junit.Ignore;
-import org.junit.Test;
 
 public class SparqlToGremlinCompilerTest {
 
@@ -444,9 +443,27 @@ public class SparqlToGremlinCompilerTest {
         assertTrue(resultActual.isEmpty());
     }
 
+    private String[] createComparisonTestInputs(int comparable) {
+        String[] inputs = new String[] {
+            String.format("%s", comparable),
+            String.format("xsd:float(%s)", comparable),
+            String.format("xsd:int(%s)", comparable),
+            String.format("xsd:integer(%s)", comparable),
+            String.format("<%sabs>(%s)", ARQConstants.fnPrefix, -comparable),
+            String.format("<%sstring-length>('%s')", ARQConstants.fnPrefix, StringUtils.repeat("a", comparable)),
+            String.format("<%sceiling>(%s)", ARQConstants.fnPrefix, comparable - 0.9),
+            String.format("<%sfloor>(%s)", ARQConstants.fnPrefix, comparable + 0.9),
+            String.format("<%sround>(%s)", ARQConstants.fnPrefix, comparable + 0.4),
+            String.format("<%sround>(%s)", ARQConstants.fnPrefix, comparable - 0.5),
+            String.format("<%sseconds-from-duration>(xsd:duration('P5DT12H30M%s.0S'))", ARQConstants.fnPrefix, comparable),
+        };
+
+        return inputs;
+    }
+
     @Test
     public void testGotgComparisonOperatorEquals() {
-        String[] inputs = new String[] { "30", "xsd:float(30)", "xsd:int(30)", "xsd:integer(30)" };
+        String[] inputs = createComparisonTestInputs(30);
 
         GraphTraversal expected = gg.V().match(
             __.as("VAR1").out("father").as("VAR0"),
@@ -475,7 +492,7 @@ public class SparqlToGremlinCompilerTest {
 
     @Test
     public void testGotgComparisonOperatorNotEquals() {
-        String[] inputs = new String[] { "30", "xsd:float(30)", "xsd:int(30)", "xsd:integer(30)" };
+        String[] inputs = createComparisonTestInputs(30);
 
         GraphTraversal expected = gg.V().match(
             __.as("VAR1").out("father").as("VAR0"),
@@ -519,7 +536,7 @@ public class SparqlToGremlinCompilerTest {
 
     @Test
     public void testGotgXsdSingleArgFunctionsGreaterThan() {
-        String[] inputs = new String[] { "29", "xsd:float(29)", "xsd:int(29)", "xsd:integer(29)" };
+        String[] inputs = createComparisonTestInputs(29);
 
         GraphTraversal expected = gg.V().match(
             __.as("VAR1").out("father").as("VAR0"),
@@ -541,7 +558,7 @@ public class SparqlToGremlinCompilerTest {
 
     @Test
     public void testGotgXsdSingleArgFunctionsGreaterThanOrEqual() {
-        String[] inputs = new String[] { "29", "xsd:float(30)", "xsd:int(30)", "xsd:integer(30)" };
+        String[] inputs = createComparisonTestInputs(30);
 
         GraphTraversal expected = gg.V().match(
             __.as("VAR1").out("father").as("VAR0"),
@@ -563,7 +580,7 @@ public class SparqlToGremlinCompilerTest {
 
     @Test
     public void testGotgXsdSingleArgFunctionsGreaterThanArgsReversed() {
-        String[] inputs = new String[] { "35", "xsd:float(35)", "xsd:int(35)", "xsd:integer(35)" };
+        String[] inputs = createComparisonTestInputs(35);
 
         GraphTraversal expected = gg.V().match(
             __.as("VAR1").out("father").as("VAR0"),
@@ -585,7 +602,7 @@ public class SparqlToGremlinCompilerTest {
 
     @Test
     public void testGotgXsdSingleArgFunctionsGreaterThanOrEqualArgsReversed() {
-        String[] inputs = new String[] { "30", "xsd:float(30)", "xsd:int(30)", "xsd:integer(30)" };
+        String[] inputs = createComparisonTestInputs(30);
 
         GraphTraversal expected = gg.V().match(
             __.as("VAR1").out("father").as("VAR0"),
@@ -607,7 +624,7 @@ public class SparqlToGremlinCompilerTest {
 
     @Test
     public void testGotgXsdSingleArgFunctionsLessThan() {
-        String[] inputs = new String[] { "29", "xsd:float(29)", "xsd:int(29)", "xsd:integer(29)" };
+        String[] inputs = createComparisonTestInputs(29);
 
         GraphTraversal expected = gg.V().match(
             __.as("VAR1").out("father").as("VAR0"),
@@ -629,7 +646,7 @@ public class SparqlToGremlinCompilerTest {
 
     @Test
     public void testGotgXsdSingleArgFunctionsLessThanArgsReversed() {
-        String[] inputs = new String[] { "35", "xsd:float(35)", "xsd:int(35)", "xsd:integer(35)" };
+        String[] inputs = createComparisonTestInputs(35);
 
         GraphTraversal expected = gg.V().match(
             __.as("VAR1").out("father").as("VAR0"),

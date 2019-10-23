@@ -19,10 +19,6 @@
 
 package com.datastax.sparql.gremlin;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
 import org.apache.jena.graph.Triple;
 import org.apache.jena.sparql.algebra.op.OpBGP;
 import org.apache.jena.sparql.expr.E_Equals;
@@ -38,10 +34,20 @@ import org.apache.jena.sparql.expr.E_NotExists;
 import org.apache.jena.sparql.expr.E_StrLength;
 import org.apache.jena.sparql.expr.Expr;
 import org.apache.jena.sparql.expr.ExprFunction;
+import org.apache.jena.sparql.expr.NodeValue;
+import org.apache.jena.sparql.function.Function;
+import org.apache.jena.sparql.function.FunctionBase;
+import org.apache.jena.sparql.function.FunctionFactory;
+import org.apache.jena.sparql.function.FunctionRegistry;
 import org.apache.tinkerpop.gremlin.process.traversal.P;
 import org.apache.tinkerpop.gremlin.process.traversal.Step;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 class WhereTraversalBuilder {
 
@@ -59,6 +65,37 @@ class WhereTraversalBuilder {
 //            throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
 //        }
 //    }
+
+    private static NodeValue execFunc(ExprFunction fn) {
+        FunctionRegistry fr = FunctionRegistry.get();
+        String fnUri = fn.getFunctionIRI();
+
+        if (!fr.isRegistered(fnUri)) {
+            throw new IllegalStateException(String.format("Unsupported function: %s", fn.getFunctionIRI()));
+        }
+
+        FunctionFactory fnFactory = fr.get(fnUri);
+        Function eFn = fnFactory.create(fnUri);
+
+        List<Expr> fnArgs = fn.getArgs();
+        List<NodeValue> args = new ArrayList<>(fnArgs.size());
+
+        for (Expr fnArg : fnArgs) {
+            if (fnArg.isConstant()) {
+                args.add(fnArg.getConstant());
+            } else if (fnArg.isFunction()) {
+                args.add(execFunc((ExprFunction) fnArg));
+            } else {
+                throw new IllegalStateException(String.format("Unsupported function argument: %s", fn.getArgs()));
+            }
+        }
+
+        if (eFn instanceof FunctionBase) {
+            return ((FunctionBase) eFn).exec(args);
+        } else {
+            throw new IllegalStateException(String.format("Unsupported function: %s", fn.getFunctionIRI()));
+        }
+    }
 
     /*
      * Equals support
@@ -90,7 +127,8 @@ class WhereTraversalBuilder {
             return __.as(arg1VarName).where(arg1VarName, P.eq(arg2VarName));
         } else if (arg2.isFunction()) {
             ExprFunction fn = arg2.getFunction();
-            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            NodeValue fnResult = execFunc(fn);
+            Object value = fnResult.asNode().getLiteralValue();
             return __.as(arg1VarName).is(P.eq(value));
         } else {
             throw new IllegalStateException(String.format("Unhandled Equals expression: %s %s", arg1, arg2));
@@ -127,7 +165,8 @@ class WhereTraversalBuilder {
             return __.as(arg1VarName).where(arg1VarName, P.neq(arg2VarName));
         } else if (arg2.isFunction()) {
             ExprFunction fn = arg2.getFunction();
-            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            NodeValue fnResult = execFunc(fn);
+            Object value = fnResult.asNode().getLiteralValue();
             return __.as(arg1VarName).is(P.neq(value));
         } else {
             throw new IllegalStateException(String.format("Unhandled NotEquals expression: %s %s", arg1, arg2));
@@ -165,7 +204,8 @@ class WhereTraversalBuilder {
             return __.as(arg1VarName).where(arg1VarName, P.lt(arg2VarName));
         } else if (arg2.isFunction()) {
             ExprFunction fn = arg2.getFunction();
-            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            NodeValue fnResult = execFunc(fn);
+            Object value = fnResult.asNode().getLiteralValue();
             return __.as(arg1VarName).is(P.lt(value));
         } else {
             throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
@@ -185,7 +225,8 @@ class WhereTraversalBuilder {
             return __.as(arg2VarName).where(arg2VarName, P.gt(arg1VarName));
         } else if (arg1.isFunction()) {
             ExprFunction fn = arg1.getFunction();
-            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            NodeValue fnResult = execFunc(fn);
+            Object value = fnResult.asNode().getLiteralValue();
             return __.as(arg2VarName).is(P.gt(value));
         } else {
             throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
@@ -223,7 +264,8 @@ class WhereTraversalBuilder {
             return __.as(arg1VarName).where(arg1VarName, P.lte(arg2VarName));
         } else if (arg2.isFunction()) {
             ExprFunction fn = arg2.getFunction();
-            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            NodeValue fnResult = execFunc(fn);
+            Object value = fnResult.asNode().getLiteralValue();
             return __.as(arg1VarName).is(P.lte(value));
         } else {
             throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
@@ -243,7 +285,8 @@ class WhereTraversalBuilder {
             return __.as(arg2VarName).where(arg2VarName, P.gte(arg1VarName));
         } else if (arg1.isFunction()) {
             ExprFunction fn = arg1.getFunction();
-            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            NodeValue fnResult = execFunc(fn);
+            Object value = fnResult.asNode().getLiteralValue();
             return __.as(arg2VarName).is(P.gte(value));
         } else {
             throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
@@ -281,7 +324,8 @@ class WhereTraversalBuilder {
             return __.as(arg2VarName).where(arg2VarName, P.lt(arg1VarName));
         } else if (arg1.isFunction()) {
             ExprFunction fn = arg1.getFunction();
-            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            NodeValue fnResult = execFunc(fn);
+            Object value = fnResult.asNode().getLiteralValue();
             return __.as(arg2VarName).is(P.lt(value));
         } else {
             throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
@@ -301,7 +345,8 @@ class WhereTraversalBuilder {
             return __.as(arg1VarName).where(arg1VarName, P.gt(arg2VarName));
         } else if (arg2.isFunction()) {
             ExprFunction fn = arg2.getFunction();
-            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            NodeValue fnResult = execFunc(fn);
+            Object value = fnResult.asNode().getLiteralValue();
             return __.as(arg1VarName).is(P.gt(value));
         } else {
             throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
@@ -339,7 +384,8 @@ class WhereTraversalBuilder {
             return __.as(arg1VarName).where(arg1VarName, P.gte(arg2VarName));
         } else if (arg2.isFunction()) {
             ExprFunction fn = arg2.getFunction();
-            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            NodeValue fnResult = execFunc(fn);
+            Object value = fnResult.asNode().getLiteralValue();
             return __.as(arg1VarName).is(P.gte(value));
         } else {
             throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
@@ -359,7 +405,8 @@ class WhereTraversalBuilder {
             return __.as(arg2VarName).where(arg2VarName, P.lte(arg1VarName));
         } else if (arg1.isFunction()) {
             ExprFunction fn = arg1.getFunction();
-            Object value = fn.getArg(1).getConstant().getNode().getLiteralValue();
+            NodeValue fnResult = execFunc(fn);
+            Object value = fnResult.asNode().getLiteralValue();
             return __.as(arg2VarName).is(P.lte(value));
         } else {
             throw new IllegalStateException(String.format("Unhandled expression: %s", expression));
