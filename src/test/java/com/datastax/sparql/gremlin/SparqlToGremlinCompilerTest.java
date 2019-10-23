@@ -461,6 +461,21 @@ public class SparqlToGremlinCompilerTest {
         return inputs;
     }
 
+    private List comparisonTestHelper(String comparisonOperator, String arg1, String arg2) {
+        String query =
+            "SELECT ?VAR0 ?VAR1 ?VAR2 ?VAR3 " +
+                "WHERE { " +
+                "  ?VAR1 e:father ?VAR0 ." +
+                "  ?VAR1 v:age ?VAR2 ." +
+                "  FILTER (" + arg1 + " " + comparisonOperator + " " + arg2 + ")" +
+                "  ?VAR1 e:mother ?VAR3 ." +
+                "}";
+
+        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+
+        return actual.toList();
+    }
+
     @Test
     public void testGotgComparisonOperatorEquals() {
         String[] inputs = createComparisonTestInputs(30);
@@ -517,21 +532,6 @@ public class SparqlToGremlinCompilerTest {
             assertEquals(resultExpected, resultActual);
             assertTrue(resultActual.isEmpty());
         }
-    }
-
-    private List comparisonTestHelper(String comparisonOperator, String arg1, String arg2) {
-        String query =
-            "SELECT ?VAR0 ?VAR1 ?VAR2 ?VAR3 " +
-            "WHERE { " +
-            "  ?VAR1 e:father ?VAR0 ." +
-            "  ?VAR1 v:age ?VAR2 ." +
-            "  FILTER (" + arg1 + " " + comparisonOperator + " " + arg2 + ")" +
-            "  ?VAR1 e:mother ?VAR3 ." +
-            "}";
-
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
-
-        return actual.toList();
     }
 
     @Test
