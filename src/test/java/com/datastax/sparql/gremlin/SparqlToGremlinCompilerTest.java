@@ -22,6 +22,7 @@ package com.datastax.sparql.gremlin;
 import com.datastax.sparql.graph.GraphFactory;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.jena.sparql.ARQConstants;
+import org.apache.tinkerpop.gremlin.process.traversal.Order;
 import org.apache.tinkerpop.gremlin.process.traversal.P;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
@@ -33,7 +34,7 @@ import org.junit.Test;
 import java.util.List;
 import java.util.UUID;
 
-import static com.datastax.sparql.gremlin.SparqlToGremlinCompiler.convertToGremlinTraversal;
+import static com.datastax.sparql.gremlin.SparqlToGremlinCompiler.compile;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -59,7 +60,32 @@ public class SparqlToGremlinCompilerTest {
             __.as("pet").in("battled").as("hero")
         ).select("owner", "pet", "hero");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
+
+        List resultExpected = expected.toList();
+        List resultActual = actual.toList();
+
+        assertEquals(resultExpected, resultActual);
+    }
+
+    @Test
+    public void testGotgOrderByDecr() {
+        String query =
+            "SELECT ?GOD ?NAME ?AGE " +
+            "WHERE { " +
+                "?GOD v:label 'god' . " +
+                "?GOD v:name ?NAME . " +
+                "?GOD v:age ?AGE ." +
+            "} " +
+            "ORDER BY DESC(?AGE)";
+
+        GraphTraversal expected = gg.V().match(
+            __.as("GOD").hasLabel("god"),
+            __.as("GOD").values("name").as("NAME"),
+            __.as("GOD").values("age").as("AGE")
+        ).order().by(__.select("AGE"), Order.decr).select("GOD", "NAME", "AGE");
+
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -83,7 +109,7 @@ public class SparqlToGremlinCompilerTest {
             __.as("FATHER").values("name").as("NAME")
         ).select("NAME", "FATHER", "CHILD", "MOTHER");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -101,7 +127,7 @@ public class SparqlToGremlinCompilerTest {
             __.where("Y", P.neq("Z"))
         ).select("X", "Y", "Z");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -119,7 +145,7 @@ public class SparqlToGremlinCompilerTest {
             __.where("Y", P.eq("Z"))
         ).select("X", "Y", "Z");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -149,7 +175,7 @@ public class SparqlToGremlinCompilerTest {
             __.as("BATTLE").values("place").as("WHERE")
         ).select("HERO", "BADDIE", "WHEN", "WHERE");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -180,7 +206,7 @@ public class SparqlToGremlinCompilerTest {
             __.as("BATTLE").values("place").as("WHERE")
         ).select("HERO", "BADDIE", "WHEN", "WHERE");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -210,7 +236,7 @@ public class SparqlToGremlinCompilerTest {
             __.as("BATTLE").values("place").as("WHERE")
         ).select("HERO", "BADDIE", "WHEN", "WHERE");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -227,7 +253,7 @@ public class SparqlToGremlinCompilerTest {
             __.as(UUID.randomUUID().toString()).hasId(6).out("father").hasId(4)
         );
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         boolean resultExpected = expected.hasNext();
         boolean resultActual = actual.hasNext();
@@ -247,7 +273,7 @@ public class SparqlToGremlinCompilerTest {
             __.as(UUID.randomUUID().toString()).hasId(6).out("father").hasId(4)
         );
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         boolean resultExpected = expected.hasNext();
         boolean resultActual = actual.hasNext();
@@ -265,7 +291,7 @@ public class SparqlToGremlinCompilerTest {
             __.as(UUID.randomUUID().toString()).hasId(6).out("father").hasId(5)
         );
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         boolean resultExpected = expected.hasNext();
         boolean resultActual = actual.hasNext();
@@ -285,7 +311,7 @@ public class SparqlToGremlinCompilerTest {
             __.as(UUID.randomUUID().toString()).hasId(6).out("father").hasId(5)
         );
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         boolean resultExpected = expected.hasNext();
         boolean resultActual = actual.hasNext();
@@ -302,7 +328,7 @@ public class SparqlToGremlinCompilerTest {
             __.as("subj").out("battled").hasId(9)
         ).select("subj");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -320,7 +346,7 @@ public class SparqlToGremlinCompilerTest {
             __.as("subj").out("battled").hasId(1)
         ).select("subj");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -338,7 +364,7 @@ public class SparqlToGremlinCompilerTest {
             __.as("subj").out("battled").hasId(1)
         ).select("subj");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -359,7 +385,7 @@ public class SparqlToGremlinCompilerTest {
             __.as("subj").out("battled").hasId(1)
         ).select("subj");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -377,7 +403,7 @@ public class SparqlToGremlinCompilerTest {
             __.as(UUID.randomUUID().toString()).hasId(6).out("battled").as("monster")
         ).select("monster");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -395,7 +421,7 @@ public class SparqlToGremlinCompilerTest {
             __.as(UUID.randomUUID().toString()).hasId(6).out("battled").as("monster")
         ).select("monster");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -415,7 +441,7 @@ public class SparqlToGremlinCompilerTest {
             __.as(UUID.randomUUID().toString()).hasId(6).out("battled").as("monster")
         ).select("monster");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -433,7 +459,7 @@ public class SparqlToGremlinCompilerTest {
             __.as(UUID.randomUUID().toString()).hasId(1).out("battled").as("monster")
         ).select("monster");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -471,7 +497,7 @@ public class SparqlToGremlinCompilerTest {
                 "  ?VAR1 e:mother ?VAR3 ." +
                 "}";
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         return actual.toList();
     }
@@ -684,7 +710,7 @@ public class SparqlToGremlinCompilerTest {
             __.as("VAR2").is(P.lte(30))
         ).select("VAR0", "VAR1", "VAR2", "VAR3");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -712,7 +738,7 @@ public class SparqlToGremlinCompilerTest {
             __.as("VAR2").is(P.gte(30))
         ).select("VAR0", "VAR1", "VAR2", "VAR3");
 
-        GraphTraversal actual = convertToGremlinTraversal(gotg, query);
+        GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
         List resultActual = actual.toList();
@@ -737,7 +763,7 @@ public class SparqlToGremlinCompilerTest {
     @Test
     public void play() throws IOException {
         final String query = loadQuery("modern", 11);
-        final Traversal traversal = convertToGremlinTraversal(modern, query);
+        final Traversal traversal = compile(modern, query);
         System.out.println(traversal);
         System.out.println(traversal.toList());
         System.out.println(traversal);
@@ -754,7 +780,7 @@ public class SparqlToGremlinCompilerTest {
                 as("b").out("created").as("c"),
                 as("a").values("age").as("d")).where(as("d").is(lt(30))).
                 select("a", "b", "c");
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 1)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 1)));
     }
 
     @Test
@@ -765,7 +791,7 @@ public class SparqlToGremlinCompilerTest {
                 as("a").out("created").as("c"),
                 as("b").out("created").as("c"),
                 as("a").values("age").as("d")).where(as("d").is(lt(30)));
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 2)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 2)));
     }
 
     @Test
@@ -773,7 +799,7 @@ public class SparqlToGremlinCompilerTest {
         final GraphTraversal expected = mg.V().match(
                 as("person").values("name").as("name"),
                 as("person").values("age").as("age")).select("name", "age");
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 3)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 3)));
     }
 
     @Test
@@ -783,7 +809,7 @@ public class SparqlToGremlinCompilerTest {
                 as("person").values("age").as("age"),
                 as("person").out("created").as("project"),
                 as("project").values("name").is("lop")).select("name", "age");
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 4)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 4)));
     }
 
     @Test
@@ -791,7 +817,7 @@ public class SparqlToGremlinCompilerTest {
         final GraphTraversal expected = mg.V().match(
                 as("person").values("name").as("name"),
                 as("person").values("age").is(29)).select("name");
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 5)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 5)));
     }
 
     @Test
@@ -800,7 +826,7 @@ public class SparqlToGremlinCompilerTest {
                 as("person").values("name").as("name"),
                 as("person").values("age").as("age")).where(and(as("age").is(gt(30)), as("age").is(lt(40)))).
                 select("name", "age");
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 6)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 6)));
     }
 
     @Test
@@ -809,7 +835,7 @@ public class SparqlToGremlinCompilerTest {
                 as("person").values("name").as("name"),
                 as("person").values("age").as("age")).where(or(as("age").is(lt(30)), as("age").is(gt(40)))).
                 select("name", "age");
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 7)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 7)));
     }
 
     @Test
@@ -819,7 +845,7 @@ public class SparqlToGremlinCompilerTest {
                 as("person").values("age").as("age")).where(
                 or(and(as("age").is(gt(30)), as("age").is(lt(40))), as("name").is("marko"))).
                 select("name", "age");
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 8)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 8)));
     }
 
     @Test
@@ -827,7 +853,7 @@ public class SparqlToGremlinCompilerTest {
         final GraphTraversal expected = mg.V().match(
                 as("a").values("name").as("name")).where(as("a").values("age")).
                 select("name");
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 9)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 9)));
     }
 
     @Test
@@ -835,7 +861,7 @@ public class SparqlToGremlinCompilerTest {
         final GraphTraversal expected = mg.V().match(
                 as("a").values("name").as("name")).where(__.not(as("a").values("age"))).
                 select("name");
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 10)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 10)));
     }
 
     @Test
@@ -843,7 +869,7 @@ public class SparqlToGremlinCompilerTest {
         final GraphTraversal expected = mg.V().match(
                 as("a").out("created").as("b"),
                 as("a").values("name").as("name")).dedup("name").select("name");
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 11)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 11)));
     }
 
     @Test
@@ -851,7 +877,7 @@ public class SparqlToGremlinCompilerTest {
         final GraphTraversal expected = mg.V().match(
                 as("a").out("created").as("b"),
                 as("b").values("name").as("name")).dedup();
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 12)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 12)));
     }
 
     @Test
@@ -859,7 +885,7 @@ public class SparqlToGremlinCompilerTest {
         final GraphTraversal expected = mg.V().match(
                 as("a").out("created").as("b"),
                 as("a").values("name").as("c")).dedup("a", "b", "c").select("a", "b", "c");
-        assertEquals(expected, convertToGremlinTraversal(modern, loadQuery("modern", 13)));
+        assertEquals(expected, compile(modern, loadQuery("modern", 13)));
     }
 
     /* The Crew */
@@ -872,7 +898,7 @@ public class SparqlToGremlinCompilerTest {
                 as("b").value().as("c"),
                 as("b").values("startTime").as("d")).
                 select("c", "d");
-        assertEquals(expected, convertToGremlinTraversal(crew, loadQuery("crew", 1)));
+        assertEquals(expected, compile(crew, loadQuery("crew", 1)));
     }
 
     /* Computer Mode */
@@ -886,7 +912,7 @@ public class SparqlToGremlinCompilerTest {
                 as("b").out("created").as("c"),
                 as("a").values("age").as("d")).where(as("d").is(lt(30))).
                 select("a", "b", "c");
-        assertEquals(expected, convertToGremlinTraversal(mc, loadQuery("modern", 1)));
+        assertEquals(expected, compile(mc, loadQuery("modern", 1)));
     }
 
     @Test
@@ -897,6 +923,6 @@ public class SparqlToGremlinCompilerTest {
                 as("b").value().as("c"),
                 as("b").values("startTime").as("d")).
                 select("c", "d");
-        assertEquals(expected, convertToGremlinTraversal(crew, loadQuery("crew", 1)));
+        assertEquals(expected, compile(crew, loadQuery("crew", 1)));
     }*/
 }

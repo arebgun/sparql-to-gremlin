@@ -49,7 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-class WhereTraversalBuilder {
+public class WhereTraversalBuilder {
 
 //    public static GraphTraversal<?, ?> transformExprFunction2(final ExprFunction2 expression, Function<Object, P<String>> func2) {
 //        String arg1VarName = expression.getArg1().getVarName();
@@ -66,6 +66,7 @@ class WhereTraversalBuilder {
 //        }
 //    }
 
+    // todo: experiment with supporting 'math' step via FunctionRegistry
     private static NodeValue execFunc(ExprFunction fn) {
         FunctionRegistry fr = FunctionRegistry.get();
         String fnUri = fn.getFunctionIRI();

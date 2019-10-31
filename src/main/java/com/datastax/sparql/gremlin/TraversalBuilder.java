@@ -30,7 +30,7 @@ import java.util.UUID;
 import java.util.function.Function;
 
 
-class TraversalBuilder {
+public class TraversalBuilder {
     
     public static GraphTraversal<?, ?> transform(final Triple triple, boolean invertEdge, Map<Object, UUID> vertexIdToUuid) {
         final Node subject = invertEdge ? triple.getObject() : triple.getSubject();
