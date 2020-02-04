@@ -21,10 +21,14 @@ package com.datastax.sparql.gremlin;
 
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.Triple;
+import org.apache.tinkerpop.gremlin.process.traversal.Traversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 import org.apache.tinkerpop.gremlin.structure.PropertyType;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -32,14 +36,16 @@ import java.util.function.Function;
 
 public class TraversalBuilder {
     
-    public static GraphTraversal<?, ?> transform(final Triple triple, boolean invertEdge, Map<Object, UUID> vertexIdToUuid) {
+    public static List<GraphTraversal<?, ?>> transform(final Triple triple, boolean invertEdge, Map<Object, UUID> vertexIdToUuid) {
         final Node subject = invertEdge ? triple.getObject() : triple.getSubject();
         final Node object = invertEdge ? triple.getSubject() : triple.getObject();
         final Node predicate = triple.getPredicate();
-        final String uri = predicate.getURI();
-        final String uriValue = Prefixes.getURIValue(uri);
-        final String prefix = Prefixes.getPrefix(uri);
-    
+
+        // TODO: do not support fully open queries at this moment
+//        if (subject.isVariable() && object.isVariable() && predicate.isVariable()) {
+//            throw new IllegalStateException("Fully unbound queries are not supported.");
+//        }
+
         Object subjectValue;
 
         if (subject.isURI()) {
@@ -68,43 +74,98 @@ public class TraversalBuilder {
         }
 
         Function<String, GraphTraversal<?, ?>> fn = invertEdge ? matchTraversal::in : matchTraversal::out;
-        
-        switch (prefix) {
-            case "edge":
-                if (object.isURI()) {
-                    String objectUri = object.getURI();
 
-                    if (!Prefixes.isValidVertexIdUri(objectUri)) {
-                        throw new IllegalStateException(String.format("Unexpected object URI: %s", objectUri));
+        if (predicate.isURI()) {
+            final String uri = predicate.getURI();
+            final String uriValue = Prefixes.getURIValue(uri);
+            final String prefix = Prefixes.getPrefix(uri);
+
+            switch (prefix) {
+                case "edge":
+                    if (object.isURI()) {
+                        String objectUri = object.getURI();
+
+                        if (!Prefixes.isValidVertexIdUri(objectUri)) {
+                            throw new IllegalStateException(String.format("Unexpected object URI: %s", objectUri));
+                        }
+
+                        String objectValue = Prefixes.getURIValue(objectUri);
+                        return Collections.singletonList(fn.apply(uriValue).hasId(objectValue));
+                    } else if (object.isLiteral()) {
+                        return Collections.singletonList(fn.apply(uriValue).hasId(object.getLiteralValue()));
+                    } else if (object.isVariable()) {
+                        return Collections.singletonList(fn.apply(uriValue).as(object.getName()));
+                    } else {
+                        throw new IllegalStateException(String.format("Unexpected object type: %s", object));
                     }
+                case "edge-proposition":
+                    if (object.isConcrete()) {
+                        throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
+                    } else {
+                        return Collections.singletonList(matchTraversal.outE(uriValue).as(object.getName()));
+                    }
+                case "edge-proposition-subject":
+                    if (object.isConcrete()) {
+                        throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
+                    } else {
+                        return Collections.singletonList(matchTraversal.inV().as(object.getName()));
+                    }
+                case "property":
+                    return Collections.singletonList(matchProperty(matchTraversal, uriValue, PropertyType.PROPERTY, object));
+                case "value":
+                    return Collections.singletonList(matchProperty(matchTraversal, uriValue, PropertyType.VALUE, object));
+                default:
+                    throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
+            }
+        } else if (predicate.isVariable()) {
+            if (subject.isURI()) {
+                String subjPrefix = Prefixes.getPrefix(subject.getURI());
 
-                    String objectValue = Prefixes.getURIValue(objectUri);
-                    return fn.apply(uriValue).hasId(objectValue);
-                } else if (object.isLiteral()) {
-                    return fn.apply(uriValue).hasId(object.getLiteralValue());
-                } else if (object.isVariable()) {
-                    return fn.apply(uriValue).as(object.getName());
-                } else {
-                    throw new IllegalStateException(String.format("Unexpected object type: %s", object));
+                switch (subjPrefix) {
+                    // <v6> ?PRED ?OBJ
+                    case "vertex-id":
+                        if (object.isConcrete()) {
+                            throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
+                        } else {
+                            String predName = predicate.getName();
+                            String objName = object.getName();
+
+                            UUID uuid = vertexIdToUuid.computeIfAbsent(subjectValue, v -> UUID.randomUUID());
+                            String label = uuid.toString();
+
+                            return Arrays.asList(
+                                __.as(label).hasId(subjectValue).union(
+                                    __.match(__.as(label).outE().as(predName).otherV().as(objName)),
+                                    __.match(__.as(label).properties().as(predName).value().as(objName)),
+                                    __.match(__.as(label).label().as(objName),
+                                        __.as(label).constant("label").as(predName)),
+                                    __.match(__.as(label).id().as(objName),
+                                        __.as(label).constant("id").as(predName)))
+                            );
+                        }
+                    default:
+                        throw new IllegalStateException("Unbound predicate with non vertex URI subject is not supported");
                 }
-            case "edge-proposition":
-                if (object.isConcrete()) {
-                    throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
-                } else {
-                    return matchTraversal.outE(uriValue).as(object.getName());
-                }
-            case "edge-proposition-subject":
-                if (object.isConcrete()) {
-                    throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
-                } else {
-                    return matchTraversal.inV().as(object.getName());
-                }
-            case "property":
-                return matchProperty(matchTraversal, uriValue, PropertyType.PROPERTY, object);
-            case "value":
-                return matchProperty(matchTraversal, uriValue, PropertyType.VALUE, object);
-            default:
-                throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
+            } else if (subject.isVariable()) {
+                String predName = predicate.getName();
+                String objName = object.getName();
+
+                String label = subject.getName();
+
+                return Arrays.asList(
+                    __.as(label).union(
+                        __.match(__.as(label).outE().as(predName).otherV().as(objName)),
+                        __.match(__.as(label).properties().as(predName).value().as(objName)),
+                        __.match(__.as(label).label().as(objName),
+                            __.as(label).constant("label").as(predName)),
+                        __.match(__.as(label).id().as(objName),
+                            __.as(label).constant("id").as(predName)))
+                );
+            } else {
+                throw new IllegalStateException("Unbound predicate with non-URI subject not supported");
+            }
+        } else {
+            throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
         }
     }
 

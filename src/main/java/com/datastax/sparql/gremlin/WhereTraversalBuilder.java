@@ -430,7 +430,7 @@ public class WhereTraversalBuilder {
         final OpBGP opBGP = (OpBGP) expression.getGraphPattern();
         final List<Triple> triples = opBGP.getPattern().getList();
         if (triples.size() != 1) throw new IllegalStateException("Unhandled EXISTS pattern");
-        final GraphTraversal<?, ?> traversal = TraversalBuilder.transform(triples.get(0), false, vertexIdToUuid);
+        final GraphTraversal<?, ?> traversal = TraversalBuilder.transform(triples.get(0), false, vertexIdToUuid).get(0);
         final Step endStep = traversal.asAdmin().getEndStep();
         final String label = (String) endStep.getLabels().iterator().next();
         endStep.removeLabel(label);
@@ -442,7 +442,7 @@ public class WhereTraversalBuilder {
         final OpBGP opBGP = (OpBGP) expression.getGraphPattern();
         final List<Triple> triples = opBGP.getPattern().getList();
         if (triples.size() != 1) throw new IllegalStateException("Unhandled NOT EXISTS pattern");
-        final GraphTraversal<?, ?> traversal = TraversalBuilder.transform(triples.get(0), false, vertexIdToUuid);
+        final GraphTraversal<?, ?> traversal = TraversalBuilder.transform(triples.get(0), false, vertexIdToUuid).get(0);
         final Step endStep = traversal.asAdmin().getEndStep();
         final String label = (String) endStep.getLabels().iterator().next();
         endStep.removeLabel(label);

@@ -59,19 +59,23 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * The engine that compiles SPARQL to Gremlin traversals thus enabling SPARQL to be executed on any TinkerPop-enabled
+ * graph system.
+ */
 public class SparqlToGremlinCompiler {
 
 	private GraphTraversal<Vertex, ?> traversal;
 
-	List<Traversal> traversalList = new ArrayList<>();
-	List<Traversal> optionalTraversals = new ArrayList<>();
-	List<String> optionalVariable = new ArrayList<>();
-    Map<Object, UUID> vertexIdToUuid = new HashMap<>();
+	private List<Traversal> traversalList = new ArrayList<>();
+	private List<Traversal> optionalTraversals = new ArrayList<>();
+	private List<String> optionalVariable = new ArrayList<>();
+    private Map<Object, UUID> vertexIdToUuid = new HashMap<>();
 
-    boolean optionalFlag = false;
+    private boolean optionalFlag = false;
 
-	GraphTraversalSource temp;
-	Graph graph;
+	private GraphTraversalSource temp;
+	private Graph graph;
 
 	private SparqlToGremlinCompiler(final GraphTraversal<Vertex, ?> traversal) {
 		this.traversal = traversal;
@@ -80,7 +84,6 @@ public class SparqlToGremlinCompiler {
 	private SparqlToGremlinCompiler(final GraphTraversalSource g) {
 		this(g.V());
 		temp = g;
-
 	}
 
 	private SparqlToGremlinCompiler(final Graph g) {
@@ -239,12 +242,14 @@ public class SparqlToGremlinCompiler {
 
 			if(optionalFlag)
 			{
-				triples.forEach(triple -> optionalTraversals.add(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid)));
-				triples.forEach(triple -> optionalVariable.add(triple.getObject().toString()));
+				triples.forEach(triple ->
+                    optionalTraversals.addAll(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid)));
 
-			}
-			else {
-				triples.forEach(triple -> traversalList.add(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid)));
+				triples.forEach(triple ->
+                    optionalVariable.add(triple.getObject().toString()));
+			} else {
+				triples.forEach(triple ->
+                    traversalList.addAll(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid)));
 			}
 		}
 
@@ -319,15 +324,22 @@ public class SparqlToGremlinCompiler {
 		return compile(graph, query);
 	}
 
-	public static GraphTraversal<Vertex, ?> compile(final Graph graph, final String query) {
-		if (query.contains("?x") && query.contains("?y") && query.contains("?z")) {
-			return graph.traversal().V().outE().inV().path().by(__.valueMap());
-		}
+	public static GraphTraversal<Vertex, ?> convertToGremlinTraversal(final GraphTraversalSource gts, final String query) {
+		return compile(gts, query);
+	}
 
+	public static GraphTraversal<Vertex, ?> compile(final Graph graph, final String query) {
 		String pquery = Prefixes.prepend(query);
 		ParameterizedSparqlString pss = new ParameterizedSparqlString(pquery, PrefixMapping.Standard);
 		Query q = QueryFactory.create(pss.toString(), Syntax.syntaxSPARQL);
 		return new SparqlToGremlinCompiler(graph.traversal()).compile(q);
+	}
+
+	public static GraphTraversal<Vertex, ?> compile(final GraphTraversalSource gts, final String query) {
+		String pquery = Prefixes.prepend(query);
+		ParameterizedSparqlString pss = new ParameterizedSparqlString(pquery, PrefixMapping.Standard);
+		Query q = QueryFactory.create(pss.toString(), Syntax.syntaxSPARQL);
+		return new SparqlToGremlinCompiler(gts).compile(q);
 	}
 
     private List<Triple> reorderTriplesWrtProperties(List<Triple> triples) {
