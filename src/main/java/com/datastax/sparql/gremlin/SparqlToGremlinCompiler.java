@@ -247,13 +247,13 @@ public class SparqlToGremlinCompiler {
 			if(optionalFlag)
 			{
 				triples.forEach(triple ->
-                    optionalTraversals.addAll(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid)));
+                    optionalTraversals.add(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid)));
 
 				triples.forEach(triple ->
                     optionalVariable.add(triple.getObject().toString()));
 			} else {
 				triples.forEach(triple ->
-                    traversalList.addAll(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid)));
+                    traversalList.add(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid)));
 			}
 		}
 

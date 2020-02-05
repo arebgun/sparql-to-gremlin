@@ -21,26 +21,22 @@ package com.datastax.sparql.gremlin;
 
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.Triple;
-import org.apache.tinkerpop.gremlin.process.traversal.Traversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 import org.apache.tinkerpop.gremlin.structure.PropertyType;
 import org.apache.tinkerpop.gremlin.structure.T;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 
 
 public class TraversalBuilder {
-    
+
     public static String PREFIX_KEY_NAME = "GREMLINATOR_PREFIX_KEYNAME";
     public static String PREDICATE_KEY_NAME = "GREMLINATOR_PREDICATE_KEYNAME";
-    
-    public static List<GraphTraversal<?, ?>> transform(final Triple triple, boolean invertEdge, Map<Object, UUID> vertexIdToUuid) {
+
+    public static GraphTraversal<?, ?> transform(final Triple triple, boolean invertEdge, Map<Object, UUID> vertexIdToUuid) {
         final Node subject = invertEdge ? triple.getObject() : triple.getSubject();
         final Node object = invertEdge ? triple.getSubject() : triple.getObject();
         final Node predicate = triple.getPredicate();
@@ -89,11 +85,11 @@ public class TraversalBuilder {
                         }
 
                         String objectValue = Prefixes.getURIValue(objectUri);
-                        return Collections.singletonList(fn.apply(uriValue).hasId(objectValue));
+                        return fn.apply(uriValue).hasId(objectValue);
                     } else if (object.isLiteral()) {
-                        return Collections.singletonList(fn.apply(uriValue).hasId(object.getLiteralValue()));
+                        return fn.apply(uriValue).hasId(object.getLiteralValue());
                     } else if (object.isVariable()) {
-                        return Collections.singletonList(fn.apply(uriValue).as(object.getName()));
+                        return fn.apply(uriValue).as(object.getName());
                     } else {
                         throw new IllegalStateException(String.format("Unexpected object type: %s", object));
                     }
@@ -101,18 +97,18 @@ public class TraversalBuilder {
                     if (object.isConcrete()) {
                         throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
                     } else {
-                        return Collections.singletonList(matchTraversal.outE(uriValue).as(object.getName()));
+                        return matchTraversal.outE(uriValue).as(object.getName());
                     }
                 case "edge-proposition-subject":
                     if (object.isConcrete()) {
                         throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
                     } else {
-                        return Collections.singletonList(matchTraversal.inV().as(object.getName()));
+                        return matchTraversal.inV().as(object.getName());
                     }
                 case "property":
-                    return Collections.singletonList(matchProperty(matchTraversal, uriValue, PropertyType.PROPERTY, object));
+                    return matchProperty(matchTraversal, uriValue, PropertyType.PROPERTY, object);
                 case "value":
-                    return Collections.singletonList(matchProperty(matchTraversal, uriValue, PropertyType.VALUE, object));
+                    return matchProperty(matchTraversal, uriValue, PropertyType.VALUE, object);
                 default:
                     throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
             }
@@ -134,17 +130,16 @@ public class TraversalBuilder {
                             UUID uuid = vertexIdToUuid.computeIfAbsent(subjectValue, v -> UUID.randomUUID());
                             String label = uuid.toString();
 
-                            return Arrays.asList(
-                                __.as(label).hasId(subjectValue).union(
-                                    __.match(__.as(label).id().as(objName).constant("v:id").as(predName)),
-                                    __.match(__.as(label).label().as(objName).constant("v:label").as(predName)),
-                                    __.match(__.as(label).properties().as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName),
-                                        __.as(propStepName).value().as(objName)),
-                                    __.match(__.as(label).properties().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("p")).by(T.key).as(predName)),
-                                    __.match(__.as(label).outE().as(edgeStepName).otherV().as(objName),
-                                        __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)),
-                                    __.match(__.as(label).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label).as(predName))
-                            ));
+                            return __.as(label).hasId(subjectValue).union(
+                                __.match(__.as(label).id().as(objName).constant("v:id").as(predName)),
+                                __.match(__.as(label).label().as(objName).constant("v:label").as(predName)),
+                                __.match(__.as(label).properties().as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName),
+                                    __.as(propStepName).value().as(objName)),
+                                __.match(__.as(label).properties().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("p")).by(T.key).as(predName)),
+                                __.match(__.as(label).outE().as(edgeStepName).otherV().as(objName),
+                                    __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)),
+                                __.match(__.as(label).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label).as(predName))
+                            );
                         }
                     default:
                         throw new IllegalStateException("Unbound predicate with non vertex URI subject is not supported");
@@ -155,18 +150,17 @@ public class TraversalBuilder {
 
                 String label = subject.getName();
 
-                return Arrays.asList(
-                    __.as(label).union(
-                        __.match(__.as(label).id().as(objName).constant("v:id").as(predName)),
-                        __.match(__.as(label).label().as(objName).constant("v:label").as(predName)),
-                        __.match(__.as(label).properties().as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName),
-                            __.as(propStepName).value().as(objName)),
-                        __.match(__.as(label).properties().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("p")).by(T.key).as(predName)),
-                        __.match(__.as(label).outE().as(edgeStepName).otherV().as(objName),
-                            __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)),
-                        __.match(__.as(label).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label).as(predName)),
-                        __.match(__.as(label).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("eps")).by(T.label).as(predName))
-                ));
+                return __.as(label).union(
+                    __.match(__.as(label).id().as(objName).constant("v:id").as(predName)),
+                    __.match(__.as(label).label().as(objName).constant("v:label").as(predName)),
+                    __.match(__.as(label).properties().as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName),
+                        __.as(propStepName).value().as(objName)),
+                    __.match(__.as(label).properties().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("p")).by(T.key).as(predName)),
+                    __.match(__.as(label).outE().as(edgeStepName).otherV().as(objName),
+                        __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)),
+                    __.match(__.as(label).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label).as(predName)),
+                    __.match(__.as(label).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("eps")).by(T.label).as(predName))
+                );
             } else {
                 throw new IllegalStateException("Unbound predicate with non-URI subject not supported");
             }
@@ -179,31 +173,28 @@ public class TraversalBuilder {
                                                       final PropertyType type, final Node object) {
         switch (propertyName) {
             case "id":
-         
                 return object.isConcrete()
-                        ? traversal.hasId(object.getLiteralValue())
-                        : traversal.id().as(object.getName());
+                    ? traversal.hasId(object.getLiteralValue())
+                    : traversal.id().as(object.getName());
             case "label":
-            	
                 return object.isConcrete()
-                        ? traversal.hasLabel(object.getLiteralValue().toString())
-                        : traversal.label().as(object.getName());
-            	
+                    ? traversal.hasLabel(object.getLiteralValue().toString())
+                    : traversal.label().as(object.getName());
             case "key":
                 return object.isConcrete()
-                        ? traversal.hasKey(object.getLiteralValue().toString())
-                        : traversal.key().as(object.getName());
+                    ? traversal.hasKey(object.getLiteralValue().toString())
+                    : traversal.key().as(object.getName());
             case "value":
                 return object.isConcrete()
-                        ? traversal.hasValue(object.getLiteralValue().toString())
-                        : traversal.value().as(object.getName());
+                    ? traversal.hasValue(object.getLiteralValue().toString())
+                    : traversal.value().as(object.getName());
             default:
                 if (type.equals(PropertyType.PROPERTY)) {
                     return traversal.properties(propertyName).as(object.getName());
                 } else {
                     return object.isConcrete()
-                            ? traversal.values(propertyName).is(object.getLiteralValue())
-                            : traversal.values(propertyName).as(object.getName());
+                        ? traversal.values(propertyName).is(object.getLiteralValue())
+                        : traversal.values(propertyName).as(object.getName());
                 }
         }
     }
