@@ -25,6 +25,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.Traversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 import org.apache.tinkerpop.gremlin.structure.PropertyType;
+import org.apache.tinkerpop.gremlin.structure.T;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,15 +37,13 @@ import java.util.function.Function;
 
 public class TraversalBuilder {
     
+    public static String PREFIX_KEY_NAME = "GREMLINATOR_PREFIX_KEYNAME";
+    public static String PREDICATE_KEY_NAME = "GREMLINATOR_PREDICATE_KEYNAME";
+    
     public static List<GraphTraversal<?, ?>> transform(final Triple triple, boolean invertEdge, Map<Object, UUID> vertexIdToUuid) {
         final Node subject = invertEdge ? triple.getObject() : triple.getSubject();
         final Node object = invertEdge ? triple.getSubject() : triple.getObject();
         final Node predicate = triple.getPredicate();
-
-        // TODO: do not support fully open queries at this moment
-//        if (subject.isVariable() && object.isVariable() && predicate.isVariable()) {
-//            throw new IllegalStateException("Fully unbound queries are not supported.");
-//        }
 
         Object subjectValue;
 
@@ -118,15 +117,17 @@ public class TraversalBuilder {
                     throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
             }
         } else if (predicate.isVariable()) {
+            String propStepName = UUID.randomUUID().toString();
+            String edgeStepName = UUID.randomUUID().toString();
+
             if (subject.isURI()) {
                 String subjPrefix = Prefixes.getPrefix(subject.getURI());
 
                 switch (subjPrefix) {
-                    // <v6> ?PRED ?OBJ
                     case "vertex-id":
-                        if (object.isConcrete()) {
+                        if (object.isConcrete()) { // <vid> ?PRED <value>
                             throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
-                        } else {
+                        } else { // <vid> ?PRED ?OBJ
                             String predName = predicate.getName();
                             String objName = object.getName();
 
@@ -135,18 +136,20 @@ public class TraversalBuilder {
 
                             return Arrays.asList(
                                 __.as(label).hasId(subjectValue).union(
-                                    __.match(__.as(label).outE().as(predName).otherV().as(objName)),
-                                    __.match(__.as(label).properties().as(predName).value().as(objName)),
-                                    __.match(__.as(label).label().as(objName),
-                                        __.as(label).constant("label").as(predName)),
-                                    __.match(__.as(label).id().as(objName),
-                                        __.as(label).constant("id").as(predName)))
-                            );
+                                    __.match(__.as(label).id().as(objName).constant("v:id").as(predName)),
+                                    __.match(__.as(label).label().as(objName).constant("v:label").as(predName)),
+                                    __.match(__.as(label).properties().as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName),
+                                        __.as(propStepName).value().as(objName)),
+                                    __.match(__.as(label).properties().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("p")).by(T.key).as(predName)),
+                                    __.match(__.as(label).outE().as(edgeStepName).otherV().as(objName),
+                                        __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)),
+                                    __.match(__.as(label).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label).as(predName))
+                            ));
                         }
                     default:
                         throw new IllegalStateException("Unbound predicate with non vertex URI subject is not supported");
                 }
-            } else if (subject.isVariable()) {
+            } else if (subject.isVariable()) { // ?SUBJ ?PRED ?OBJ
                 String predName = predicate.getName();
                 String objName = object.getName();
 
@@ -154,13 +157,16 @@ public class TraversalBuilder {
 
                 return Arrays.asList(
                     __.as(label).union(
-                        __.match(__.as(label).outE().as(predName).otherV().as(objName)),
-                        __.match(__.as(label).properties().as(predName).value().as(objName)),
-                        __.match(__.as(label).label().as(objName),
-                            __.as(label).constant("label").as(predName)),
-                        __.match(__.as(label).id().as(objName),
-                            __.as(label).constant("id").as(predName)))
-                );
+                        __.match(__.as(label).id().as(objName).constant("v:id").as(predName)),
+                        __.match(__.as(label).label().as(objName).constant("v:label").as(predName)),
+                        __.match(__.as(label).properties().as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName),
+                            __.as(propStepName).value().as(objName)),
+                        __.match(__.as(label).properties().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("p")).by(T.key).as(predName)),
+                        __.match(__.as(label).outE().as(edgeStepName).otherV().as(objName),
+                            __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)),
+                        __.match(__.as(label).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label).as(predName)),
+                        __.match(__.as(label).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("eps")).by(T.label).as(predName))
+                ));
             } else {
                 throw new IllegalStateException("Unbound predicate with non-URI subject not supported");
             }

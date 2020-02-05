@@ -47,6 +47,8 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSo
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 import org.apache.tinkerpop.gremlin.structure.Graph;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,6 +66,7 @@ import java.util.stream.Stream;
  * graph system.
  */
 public class SparqlToGremlinCompiler {
+	private static final Logger logger = LoggerFactory.getLogger(SparqlToGremlinCompiler.class);
 
 	private GraphTraversal<Vertex, ?> traversal;
 
@@ -201,6 +204,7 @@ public class SparqlToGremlinCompiler {
 				traversal = traversal.range(offset, offset + limit);
 		}
 
+		logger.debug("Gremlin Traversal: {}", traversal);
 		return traversal;
 	}
 
