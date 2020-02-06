@@ -24,17 +24,25 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.jena.sparql.ARQConstants;
 import org.apache.tinkerpop.gremlin.process.traversal.Order;
 import org.apache.tinkerpop.gremlin.process.traversal.P;
+import org.apache.tinkerpop.gremlin.process.traversal.Traversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
+import org.apache.tinkerpop.gremlin.process.traversal.step.util.BulkSet;
 import org.apache.tinkerpop.gremlin.structure.Graph;
+import org.apache.tinkerpop.gremlin.structure.T;
+import org.apache.tinkerpop.gremlin.util.function.Lambda;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static com.datastax.sparql.gremlin.SparqlToGremlinCompiler.compile;
+import static com.datastax.sparql.gremlin.TraversalBuilder.PREDICATE_KEY_NAME;
+import static com.datastax.sparql.gremlin.TraversalBuilder.PREFIX_KEY_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -49,6 +57,242 @@ public class SparqlToGremlinCompilerTest {
     public void setUp() throws Exception {
         gotg = GraphFactory.createGraphOfTheGods();
         gg = gotg.traversal();
+    }
+
+    @Test
+    public void testGotgGetAllLabels() {
+        String query = "SELECT DISTINCT ?PRED { ?X ?PRED ?Y. }";
+//
+//        GraphTraversal expected = gg.V().bothE().otherV().path().by(__.label());
+//        System.out.println(expected.toList());
+//
+//        expected = gg.V().as("X").bothE().as("PRED").otherV().as("Y").select("PRED").label().dedup();
+//        System.out.println(expected.toList());
+//
+//        expected = gg.V().as("X").bothE().as("PRED").otherV().as("Y").select("PRED").by(__.label()).dedup();
+//        System.out.println(expected.toList());
+//
+//        expected = gg.V().match(
+//            __.as("X").bothE().as("PRED"),
+//            __.as("PRED").label().as("LABELS"),
+//            __.as("X").properties().key().as("XPROPS"),
+//            __.as("Y").properties().key().as("YPROPS"),
+//            __.as("PRED").otherV().as("Y")
+//        ).select("LABELS", "XPROPS", "YPROPS");
+//        List x = expected.toList();
+//        System.out.println(x.size() + " -- " + x);
+//
+//        expected = gg.V().match(
+//            __.as("X").outE().as("PRED"),
+//            __.as("PRED").label().as("LABELS"),
+//            __.as("X").properties().key().as("XPROPS")
+//        ).select("LABELS", "XPROPS");
+//        x = expected.toList();
+//        System.out.println(x.size() + " -- " + x);
+//
+//        System.out.println(gg.V().properties().key().dedup().toList());
+//        System.out.println(gg.E().properties().key().dedup().toList());
+//        System.out.println(gg.E().label().dedup().toList());
+//
+//        expected = gg.V().match(
+//            __.as("X").outE().as("PRED"),
+//            __.as("PRED").label().store("LABELS"),
+//            __.as("X").properties().key().store("LABELS")
+//        ).cap("LABELS");
+//        System.out.println(expected.next());
+//
+//        expected = gg.V().match(
+//            __.as("RANDOM_UUID").hasId(4).bothE().as("EDGE"),
+//            __.as("EDGE").label().as("PRED")
+//        ).select("PRED");
+//        System.out.println(expected.toList());
+
+//        GraphTraversal expected = gg.V().match(
+//            __.as("RANDOM_UUID").hasId(4).outE().as("ANOTHER_RANDOM_UUID"),
+//            __.as("ANOTHER_RANDOM_UUID").label().as("PRED"),
+//            __.as("ANOTHER_RANDOM_UUID").otherV().as("OTHER")
+//        ).select("PRED", "OTHER");
+//        System.out.println(expected.toList());
+
+        GraphTraversal expected = gg.V().match(
+            __.as("RANDOM_UUID").hasId(4).outE().as("P").store("PRED"),
+            __.as("RANDOM_UUID").properties().store("PRED"),
+            __.as("P").otherV().store("OTHER")
+        ).cap("PRED", "OTHER");
+        System.out.println(expected.toList());
+
+        expected = gg.V().match(
+            __.as("RANDOM_UUID").hasId(4).as("V").outE().as("P").store("PRED"),
+            __.as("V").properties().as("PROP").store("PRED"),
+            __.as("P").otherV().store("OTHER"),
+            __.as("PROP").value().store("OTHER")
+        ).barrier().select("PRED", "OTHER");//.cap("PRED", "OTHER");
+        System.out.println(expected.toList());
+
+        expected = gg.V().match(
+            __.as("RANDOM_UUID").match(
+            __.as("RANDOM_UUID").hasId(4).outE().as("P").store("PRED"),
+            __.as("RANDOM_UUID").properties().as("PROP").store("PRED"),
+            __.as("P").otherV().store("OTHER"),
+            __.as("PROP").values().store("OTHER")
+            ).cap("PRED", "OTHER")).select("PRED", "OTHER");
+        System.out.println(expected.toList());
+
+        expected = gg.V().hasId(4).union(__.properties(), __.project("OUT", "IN").by(__.outE()).by(__.inE()).unfold());
+        System.out.println(expected.toList());
+
+        System.out.println(gg.V(4).properties().value().toList());
+
+        expected = gg.E().match(
+            __.as("PRED").inV().as("OBJ"),
+            __.as("PRED").outV().as("SUBJ"),
+            __.as("SUBJ").properties().as("PROPS")
+        ).select("SUBJ", "PRED", "OBJ");
+        System.out.println(expected.toList());
+
+        // almost good
+        expected = gg.V(5).union(
+            __.project("PRED", "OTHER").by(__.outE()).by(__.out()),
+            __.project("PRED", "OTHER").by(__.properties()).by(__.properties().value())
+        ).select("PRED", "OTHER");
+        System.out.println(expected.toList());
+
+        // oh, so good!
+        expected = gg.V(4).union(
+            __.match(__.as("SUBJ").outE().as("PRED").otherV().as("OTHER")),
+            __.match(__.as("SUBJ").properties().as("PRED").value().as("OTHER")),
+            __.project("PRED", "OTHER").by(__.constant("label")).by(T.label),
+            __.project("PRED", "OTHER").by(__.constant("id")).by(T.id)
+        ).select("PRED", "OTHER");
+        System.out.println(expected.toList());
+
+        expected = gg.V().match(
+            __.as("SUBJ").union(
+                __.match(__.as("SUBJ").outE().as("PRED").otherV().as("OTHER")),
+                __.match(__.as("SUBJ").properties().as("PRED").value().as("OTHER")),
+                __.match(__.as("SUBJ").label().as("OTHER"),
+                         __.as("SUBJ").constant("label").as("PRED")),
+                __.match(__.as("SUBJ").id().as("OTHER"),
+                         __.as("SUBJ").constant("id").as("PRED")))
+        ).select("SUBJ", "PRED", "OTHER");
+        System.out.println(expected);
+        System.out.println(expected.toList());
+
+//        System.out.println(gg.V(4).inject().toList());
+        // SELECT ?PRED, ?OTHER { vid:4 ?PRED ?OTHER . }
+        // [ { E[father], V1 }, { E[lives], V2 }, { VP[name], "jupiter" }, { VP[age], 5000 } ]
+
+        expected = gg.V(4).outE().project("PREFIX", "P").by(__.constant("e:")).by(T.label).as("PRED");
+        System.out.println(expected.toList());
+
+        gg.V().match(
+            __.as("X").out("reviews").as("Y")
+        );
+
+//                query =
+//            "PREFIX vid: <http://northwind.com/model/vertex-id#> " +
+//            "SELECT ?SUBJ ?PRED ?OTHER " +
+//            "WHERE " +
+//            "  { ?SUBJ    ?PRED   ?OTHER . }";
+//        GraphTraversal actual = compile(gotg, query);
+//        System.out.println(actual.toList());
+    }
+
+    @Test
+    public void testGotgBoundVertexSubject() {
+        String query = "\n" +
+            "SELECT ?PRED ?OTHER " +
+            "WHERE { " +
+                "vid:4 ?PRED ?OTHER . " +
+            "}";
+
+        GraphTraversal expected = gg.V().match(
+            __.as("SUBJ").hasId(4).union(
+                // get Vertex label value
+                __.match(__.as("SUBJ").id().as("OTHER"),
+                    __.as("SUBJ").constant("v:id").as("PRED")),
+
+                // get Vertex id value
+                __.match(__.as("SUBJ").label().as("OTHER"),
+                    __.as("SUBJ").constant("v:label").as("PRED")),
+
+                // get the rest of Vertex property values
+                __.match(__.as("SUBJ").properties().as("PROP"),
+                    __.as("PROP").project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key)/*.key().map(name -> "v:" + name)*/.as("PRED"),
+                    __.as("PROP").value().as("OTHER")),
+
+                // get Vertex Properties
+                __.match(__.as("SUBJ").properties().as("OTHER"),
+                    __.as("OTHER").project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("p")).by(T.key)/*.key().map(name -> "p:" + name)*/.as("PRED")),
+
+                // get Vertex outgoing edge label and other vertex
+                __.match(__.as("SUBJ").outE().as("EDGE").otherV().as("OTHER"),
+                    __.as("EDGE").project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label)/*label().map(label -> "e:" + label)*/.as("PRED")),
+
+                // get Vertex outgoing edge label and Edge object (to be used with eps prefix)
+                __.match(__.as("SUBJ").outE().as("OTHER"),
+                    __.as("OTHER").project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label)/*.label().map(label -> "ep:" + label)*/.as("PRED"))
+
+//                __.match(__.as("SUBJ").valueMap(true).unfold().map(v -> ((Map.Entry)v.get())).as("PROP-ENTRY"),
+//                    __.as("PROP-ENTRY").map(v -> ((Map.Entry)v.get()).getValue()).as("OTHER"),
+//                    __.as("PROP-ENTRY").map(v -> "p:" + ((Map.Entry)v.get()).getKey()).as("PRED")),
+//
+//                __.match(__.as("SUBJ").valueMap(true).unfold().map(v -> ((Map.Entry)v.get())).as("PROP-ENTRY"),
+//                    __.as("PROP-ENTRY").map(v -> ((Map.Entry)v.get()).getValue()).as("OTHER"),
+//                    __.as("PROP-ENTRY").map(v -> "p:" + ((Map.Entry)v.get()).getKey()).as("PRED"))
+
+        )).select("PRED", "OTHER");
+
+        GraphTraversal actual = compile(gotg, query);
+
+        List resultExpected = expected.toList();
+        List resultActual = actual.toList();
+
+        assertEquals(resultExpected, resultActual);
+    }
+
+//    @Test
+//    public void testGotgFindPredicatesAndValuesConnectingToE() {
+//        String query = "SELECT ?BATTLE ?PRED ?VALUE WHERE { vid:6 ep:battled ?BATTLE . ?BATTLE ?PRED ?VALUE . }";
+//        GraphTraversal actual = compile(gotg, query);
+//
+//        List resultActual = actual.toList();
+//        System.out.println(resultActual);
+//    }
+
+    @Test
+    public void testGotgOUnboundPredBoundObj() {
+        String query = "SELECT DISTINCT ?SUBJ ?PRED WHERE { ?SUBJ ?PRED vid:4 . }";
+        GraphTraversal actual = compile(gotg, query);
+
+        GraphTraversal expected = gg.V().match(
+            __.as("SUBJ").union(
+                __.match(__.as("SUBJ").outE().as("RANDOM_UUID").otherV().hasId(4),
+                    __.as("RANDOM_UUID").project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as("PRED")),
+                __.match(__.as("SUBJ").outE().as("SUBJ").otherV().hasId(4),
+                    __.as("SUBJ").project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("eps")).by(T.label).as("PRED"))
+            )).select("SUBJ", "PRED");
+
+        List resultActual = actual.toList();
+        List resultExpected = expected.toList();
+
+        assertEquals(resultExpected, resultActual);
+    }
+
+    @Test
+    public void testGotgOptionalWithUnboundPred() {
+        GraphTraversal expected = gg.V().match(__.as("SUBJ").out("battled").as("OBJ"))
+            .coalesce(__.match(__.as("OBJ").values("age").as("AGE")), (Traversal)__.constant("N/A")).as("OBJ_AGE")
+            .coalesce(__.match(__.as("OBJ").values("name").as("OBJ_NAME")), (Traversal)__.constant("N/A")).as("OBJ_NAME")
+            .select("SUBJ", "OBJ", "OBJ_NAME", "OBJ_AGE");
+
+        String query = "SELECT ?SUBJ ?OBJ ?OBJ_NAME ?OBJ_AGE WHERE { ?SUBJ e:battled ?OBJ . OPTIONAL { ?OBJ v:name ?OBJ_NAME . } . OPTIONAL { ?OBJ v:age ?OBJ_AGE . } }";
+        GraphTraversal actual = compile(gotg, query);
+
+        List resultExpected = expected.toList();
+        List resultActual = actual.toList();
+
+        assertEquals(resultExpected, resultActual);
     }
 
     @Test

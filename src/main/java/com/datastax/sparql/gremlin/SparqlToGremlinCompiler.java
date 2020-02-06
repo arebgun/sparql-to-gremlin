@@ -96,36 +96,19 @@ public class SparqlToGremlinCompiler {
 
 	private GraphTraversal<Vertex, ?> compile(final Query query) {
 		final Op op = Algebra.compile(query);
-		OpWalker.walk(op, new GremlinOpVisitor());
-
-		int traversalIndex = 0;
-		final int numberOfTraversal = traversalList.size();
-		final int numberOfOptionalTraversal = optionalTraversals.size();
-		final Traversal[] arrayOfAllTraversals = (numberOfOptionalTraversal > 0) ?
-			new Traversal[numberOfTraversal - numberOfOptionalTraversal + 1] :
-			new Traversal[numberOfTraversal - numberOfOptionalTraversal];
-
-		final Traversal[] arrayOfOptionalTraversals = new Traversal[numberOfOptionalTraversal];
-
-		for (Traversal tempTrav : traversalList) {
-			arrayOfAllTraversals[traversalIndex++] = tempTrav;
-		}
-
-		traversalIndex = 0;
-		for (Traversal tempTrav : optionalTraversals)
-			arrayOfOptionalTraversals[traversalIndex++] = tempTrav;
+		GremlinatorOpWalker.walk(op, new GremlinOpVisitor());
 
 		// creates a map of ordering keys and their ordering direction
 		final Map<String, Order> orderingIndex = createOrderIndexFromQuery(query);
 
+		Traversal[] t = new Traversal[traversalList.size()];
 		if (traversalList.size() > 0)
-			traversal = traversal.match(arrayOfAllTraversals);
+			traversal = traversal.match(traversalList.toArray(t));
 
-		if (optionalTraversals.size() > 0) {
-			traversal = traversal.coalesce(__.match(arrayOfOptionalTraversals), (Traversal) __.constant("N/A"));
-			for (int i = 0; i < optionalVariable.size(); i++) {
-				traversal = traversal.as(optionalVariable.get(i).substring(1));
-			}
+		for (int i = 0; i < optionalTraversals.size(); i++) {
+			String optVarName = optionalVariable.get(i).substring(1);
+			traversal = traversal.coalesce(__.match(optionalTraversals.get(i)).select(optVarName), (Traversal) __.constant("N/A"));
+			traversal = traversal.as(optVarName);
 		}
 
 		final List<String> vars = query.getResultVars();
@@ -294,7 +277,7 @@ public class SparqlToGremlinCompiler {
 		 */
 		private void optionalVisit(final Op op) {
 
-			OpWalker.walk(op, this);
+			GremlinatorOpWalker.walk(op, this);
 		}
 
 		/**
@@ -302,9 +285,9 @@ public class SparqlToGremlinCompiler {
 		 */
 		@Override
 		public void visit(final OpUnion opUnion) {
-			final Traversal unionTemp[] = new Traversal[2];
-			final Traversal unionTemp1[] = new Traversal[traversalList.size() / 2];
-			final Traversal unionTemp2[] = new Traversal[traversalList.size() / 2];
+			final Traversal[] unionTemp = new Traversal[2];
+			final Traversal[] unionTemp1 = new Traversal[traversalList.size() / 2];
+			final Traversal[] unionTemp2 = new Traversal[traversalList.size() / 2];
 
 			int count = 0;
 
