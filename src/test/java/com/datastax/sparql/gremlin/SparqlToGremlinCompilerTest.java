@@ -161,6 +161,22 @@ public class SparqlToGremlinCompilerTest {
 //    }
 
     @Test
+    public void testGotg_VertexUriSubject_UnboundPredicate_VertexUriObject() {
+        String query = "SELECT DISTINCT ?PRED WHERE { vid:4 ?PRED vid:2 . }";
+        GraphTraversal actual = compile(gotg, query);
+
+        List resultActual = actual.toList();
+
+        assertEquals(resultActual.size(), 1);
+        assertEquals(
+            resultActual.get(0),
+            new HashMap<String, String>() {{
+                put(PREFIX_KEY_NAME, "e");
+                put(PREDICATE_KEY_NAME, "lives");
+            }});
+    }
+
+    @Test
     public void testGotgVertexUriSubjectUnboundPredicateBoundLiteralObjectVertexLabelProperty() {
         String query = "SELECT DISTINCT ?PRED WHERE { vid:2 ?PRED \"location\" . }";
         GraphTraversal actual = compile(gotg, query);

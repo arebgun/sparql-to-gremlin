@@ -153,6 +153,22 @@ public class TraversalBuilder {
                                     __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)),
                                 __.match(__.as(label).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label).as(predName))
                             );
+                        } else if (object.isURI()) { // <vid> ?PRED <vid>
+                            String predName = predicate.getName();
+                            String objectUri = object.getURI();
+
+                            if (!Prefixes.isValidVertexIdUri(objectUri)) {
+                                throw new IllegalStateException(String.format("Unexpected object URI: %s", objectUri));
+                            }
+
+                            UUID uuid = vertexIdToUuid.computeIfAbsent(subjectValue, v -> UUID.randomUUID());
+                            String subjLabel = uuid.toString();
+                            String objValue = Prefixes.getURIValue(objectUri);
+
+                            return __.as(subjLabel).hasId(subjectValue).match(
+                                __.as(subjLabel).outE().as(edgeStepName).otherV().hasId(objValue),
+                                __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)
+                            );
                         }
                     default:
                         throw new IllegalStateException("Unbound predicate with non vertex URI subject is not supported");
