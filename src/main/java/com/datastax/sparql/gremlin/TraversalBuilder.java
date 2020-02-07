@@ -44,13 +44,7 @@ public class TraversalBuilder {
         Object subjectValue;
 
         if (subject.isURI()) {
-            String subjectUri = subject.getURI();
-
-            if (!Prefixes.isValidVertexIdUri(subjectUri)) {
-                throw new IllegalStateException(String.format("Unexpected object URI: %s", subjectUri));
-            }
-
-            subjectValue = Prefixes.getURIValue(subjectUri);
+            subjectValue = getUriValueFromVertexNode(subject);
         } else if (subject.isLiteral()) {
             subjectValue = subject.getLiteralValue();
         } else if (subject.isVariable()) {
@@ -71,25 +65,20 @@ public class TraversalBuilder {
         Function<String, GraphTraversal<?, ?>> fn = invertEdge ? matchTraversal::in : matchTraversal::out;
 
         if (predicate.isURI()) {
-            final String uri = predicate.getURI();
-            final String uriValue = Prefixes.getURIValue(uri);
-            final String prefix = Prefixes.getPrefix(uri);
+            final String predicateUri = predicate.getURI();
+            final String predicateName = Prefixes.getURIValue(predicateUri);
+            final String predicateType = Prefixes.getPrefix(predicateUri);
 
-            switch (prefix) {
+            switch (predicateType) {
                 case "edge":
+                    GraphTraversal<?, ?> otherV = fn.apply(predicateName);
+
                     if (object.isURI()) {
-                        String objectUri = object.getURI();
-
-                        if (!Prefixes.isValidVertexIdUri(objectUri)) {
-                            throw new IllegalStateException(String.format("Unexpected object URI: %s", objectUri));
-                        }
-
-                        String objectValue = Prefixes.getURIValue(objectUri);
-                        return fn.apply(uriValue).hasId(objectValue);
+                        return otherV.hasId(getUriValueFromVertexNode(object));
                     } else if (object.isLiteral()) {
-                        return fn.apply(uriValue).hasId(object.getLiteralValue());
+                        return otherV.hasId(object.getLiteralValue());
                     } else if (object.isVariable()) {
-                        return fn.apply(uriValue).as(object.getName());
+                        return otherV.as(object.getName());
                     } else {
                         throw new IllegalStateException(String.format("Unexpected object type: %s", object));
                     }
@@ -97,7 +86,7 @@ public class TraversalBuilder {
                     if (object.isConcrete()) {
                         throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
                     } else {
-                        return matchTraversal.outE(uriValue).as(object.getName());
+                        return matchTraversal.outE(predicateName).as(object.getName());
                     }
                 case "edge-proposition-subject":
                     if (object.isConcrete()) {
@@ -106,27 +95,26 @@ public class TraversalBuilder {
                         return matchTraversal.inV().as(object.getName());
                     }
                 case "property":
-                    return matchProperty(matchTraversal, uriValue, PropertyType.PROPERTY, object);
+                    return matchProperty(matchTraversal, predicateName, PropertyType.PROPERTY, object);
                 case "value":
-                    return matchProperty(matchTraversal, uriValue, PropertyType.VALUE, object);
+                    return matchProperty(matchTraversal, predicateName, PropertyType.VALUE, object);
                 default:
                     throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
             }
         } else if (predicate.isVariable()) {
+            String predName = predicate.getName();
             String propStepName = UUID.randomUUID().toString();
             String edgeStepName = UUID.randomUUID().toString();
 
             if (subject.isURI()) {
                 String subjPrefix = Prefixes.getPrefix(subject.getURI());
 
+                UUID uuid = vertexIdToUuid.computeIfAbsent(subjectValue, v -> UUID.randomUUID());
+                String subjLabel = uuid.toString();
+
                 switch (subjPrefix) {
                     case "vertex-id":
                         if (object.isLiteral()) { // <vid> ?PRED <value>
-                            String predName = predicate.getName();
-
-                            UUID uuid = vertexIdToUuid.computeIfAbsent(subjectValue, v -> UUID.randomUUID());
-                            String subjLabel = uuid.toString();
-
                             Object objValue = object.getLiteralValue();
 
                             return __.as(subjLabel).hasId(subjectValue).union(
@@ -137,33 +125,20 @@ public class TraversalBuilder {
                                     __.as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName))
                             );
                         } else if (object.isVariable()){ // <vid> ?PRED ?OBJ
-                            String predName = predicate.getName();
                             String objName = object.getName();
 
-                            UUID uuid = vertexIdToUuid.computeIfAbsent(subjectValue, v -> UUID.randomUUID());
-                            String label = uuid.toString();
-
-                            return __.as(label).hasId(subjectValue).union(
-                                __.match(__.as(label).id().as(objName).constant("v:id").as(predName)),
-                                __.match(__.as(label).label().as(objName).constant("v:label").as(predName)),
-                                __.match(__.as(label).properties().as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName),
+                            return __.as(subjLabel).hasId(subjectValue).union(
+                                __.match(__.as(subjLabel).id().as(objName).constant("v:id").as(predName)),
+                                __.match(__.as(subjLabel).label().as(objName).constant("v:label").as(predName)),
+                                __.match(__.as(subjLabel).properties().as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName),
                                     __.as(propStepName).value().as(objName)),
-                                __.match(__.as(label).properties().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("p")).by(T.key).as(predName)),
-                                __.match(__.as(label).outE().as(edgeStepName).otherV().as(objName),
+                                __.match(__.as(subjLabel).properties().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("p")).by(T.key).as(predName)),
+                                __.match(__.as(subjLabel).outE().as(edgeStepName).otherV().as(objName),
                                     __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)),
-                                __.match(__.as(label).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label).as(predName))
+                                __.match(__.as(subjLabel).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label).as(predName))
                             );
                         } else if (object.isURI()) { // <vid> ?PRED <vid>
-                            String predName = predicate.getName();
-                            String objectUri = object.getURI();
-
-                            if (!Prefixes.isValidVertexIdUri(objectUri)) {
-                                throw new IllegalStateException(String.format("Unexpected object URI: %s", objectUri));
-                            }
-
-                            UUID uuid = vertexIdToUuid.computeIfAbsent(subjectValue, v -> UUID.randomUUID());
-                            String subjLabel = uuid.toString();
-                            String objValue = Prefixes.getURIValue(objectUri);
+                            String objValue = getUriValueFromVertexNode(object);
 
                             return __.as(subjLabel).hasId(subjectValue).match(
                                 __.as(subjLabel).outE().as(edgeStepName).otherV().hasId(objValue),
@@ -174,7 +149,6 @@ public class TraversalBuilder {
                         throw new IllegalStateException("Unbound predicate with non vertex URI subject is not supported");
                 }
             } else if (subject.isVariable()) {
-                String predName = predicate.getName();
                 String subjLabel = subject.getName();
 
                 if (object.isVariable()) {  // ?SUBJ ?PRED ?OBJ
@@ -192,13 +166,7 @@ public class TraversalBuilder {
                         __.match(__.as(subjLabel).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("eps")).by(T.label).as(predName))
                     );
                 } else if (object.isURI()) { // ?SUBJ ?PRED <vid uri>
-                    String objectUri = object.getURI();
-
-                    if (!Prefixes.isValidVertexIdUri(objectUri)) {
-                        throw new IllegalStateException(String.format("Unexpected object URI: %s", objectUri));
-                    }
-
-                    String objValue = Prefixes.getURIValue(objectUri);
+                    String objValue = getUriValueFromVertexNode(object);
 
                     return __.as(subjLabel).union(
                         __.match(__.as(subjLabel).outE().as(edgeStepName).otherV().hasId(objValue),
@@ -230,8 +198,18 @@ public class TraversalBuilder {
                 throw new IllegalStateException("Unbound predicate with literal subject is not supported " + triple);
             }
         } else {
-            throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
+            throw new IllegalStateException(String.format("Unsupported predicate: %s in %s.", predicate, triple));
         }
+    }
+
+    private static String getUriValueFromVertexNode(Node vertexNode) {
+        String nodeUri = vertexNode.getURI();
+
+        if (!Prefixes.isValidVertexIdUri(nodeUri)) {
+            throw new IllegalStateException("Unsupported Vertex Node URI: " + nodeUri);
+        }
+
+        return Prefixes.getURIValue(nodeUri);
     }
 
     private static GraphTraversal<?, ?> matchProperty(final GraphTraversal<?, ?> traversal, final String propertyName,
