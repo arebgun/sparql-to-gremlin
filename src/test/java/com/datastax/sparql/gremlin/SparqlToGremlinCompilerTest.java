@@ -161,6 +161,48 @@ public class SparqlToGremlinCompilerTest {
 //    }
 
     @Test
+    public void testGotgVertexUriSubjectUnboundPredicateBoundLiteralObjectVertexLabelProperty() {
+        String query = "SELECT DISTINCT ?PRED WHERE { vid:2 ?PRED \"location\" . }";
+        GraphTraversal actual = compile(gotg, query);
+
+        List resultActual = actual.toList();
+
+        assertEquals(resultActual.size(), 1);
+        assertEquals(resultActual.get(0), "v:label");
+    }
+
+    @Test
+    public void testGotgVertexUriSubjectUnboundPredicateBoundLiteralObjectVertexStringProperty() {
+        String query = "SELECT DISTINCT ?PRED WHERE { vid:2 ?PRED \"sky\" . }";
+        GraphTraversal actual = compile(gotg, query);
+
+        List resultActual = actual.toList();
+
+        assertEquals(resultActual.size(), 1);
+        assertEquals(
+            resultActual.get(0),
+            new HashMap<String, String>() {{
+                put(PREFIX_KEY_NAME, "v");
+                put(PREDICATE_KEY_NAME, "name");
+            }});
+    }
+
+    @Test
+    public void testGotgVertexUriSubjectUnboundPredicateBoundLiteralObjectVertexIntProperty() {
+        String query = "SELECT DISTINCT ?PRED WHERE { vid:1 ?PRED 10000 . }";
+        GraphTraversal actual = compile(gotg, query);
+
+        List resultActual = actual.toList();
+
+        assertEquals(resultActual.size(), 1);
+        assertEquals(resultActual.get(0),
+            new HashMap<String, String>() {{
+                put(PREFIX_KEY_NAME, "v");
+                put(PREDICATE_KEY_NAME, "age");
+            }});
+    }
+
+    @Test
     public void testGotgUnboundPredicateBoundLiteralObjectVertexLabelProperty() {
         String objValue = "god";
         String query = "SELECT DISTINCT ?SUBJ ?PRED WHERE { ?SUBJ ?PRED \"" + objValue + "\" . }";

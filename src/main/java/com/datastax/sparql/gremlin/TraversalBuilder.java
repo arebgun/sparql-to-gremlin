@@ -121,9 +121,22 @@ public class TraversalBuilder {
 
                 switch (subjPrefix) {
                     case "vertex-id":
-                        if (object.isConcrete()) { // <vid> ?PRED <value>
-                            throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
-                        } else { // <vid> ?PRED ?OBJ
+                        if (object.isLiteral()) { // <vid> ?PRED <value>
+                            String predName = predicate.getName();
+
+                            UUID uuid = vertexIdToUuid.computeIfAbsent(subjectValue, v -> UUID.randomUUID());
+                            String subjLabel = uuid.toString();
+
+                            Object objValue = object.getLiteralValue();
+
+                            return __.as(subjLabel).hasId(subjectValue).union(
+                                // starting with a vertex
+                                __.match(__.as(subjLabel).hasId(objValue).constant("v:id").as(predName)),
+                                __.match(__.as(subjLabel).hasLabel(objValue.toString()).constant("v:label").as(predName)),
+                                __.match(__.as(subjLabel).properties().as(propStepName).value().is(objValue),
+                                    __.as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName))
+                            );
+                        } else if (object.isVariable()){ // <vid> ?PRED ?OBJ
                             String predName = predicate.getName();
                             String objName = object.getName();
 
@@ -144,11 +157,11 @@ public class TraversalBuilder {
                     default:
                         throw new IllegalStateException("Unbound predicate with non vertex URI subject is not supported");
                 }
-            } else if (subject.isVariable()) { // ?SUBJ ?PRED ?OBJ
+            } else if (subject.isVariable()) {
                 String predName = predicate.getName();
                 String subjLabel = subject.getName();
 
-                if (object.isVariable()) {
+                if (object.isVariable()) {  // ?SUBJ ?PRED ?OBJ
                     String objName = object.getName();
 
                     return __.as(subjLabel).union(
@@ -162,7 +175,7 @@ public class TraversalBuilder {
                         __.match(__.as(subjLabel).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label).as(predName)),
                         __.match(__.as(subjLabel).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("eps")).by(T.label).as(predName))
                     );
-                } else if (object.isURI()) {
+                } else if (object.isURI()) { // ?SUBJ ?PRED <vid uri>
                     String objectUri = object.getURI();
 
                     if (!Prefixes.isValidVertexIdUri(objectUri)) {
@@ -177,7 +190,7 @@ public class TraversalBuilder {
                         __.match(__.as(subjLabel).outE().as(subjLabel).otherV().hasId(objValue),
                             __.as(subjLabel).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("eps")).by(T.label).as(predName))
                     );
-                } else if (object.isLiteral()) {
+                } else if (object.isLiteral()) { // ?SUBJ ?PRED <string|int|etc>
                     Object objValue = object.getLiteralValue();
 
                     return __.as(subjLabel).union(
@@ -195,10 +208,10 @@ public class TraversalBuilder {
                             __.as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(__.as(propStepName).key()).as(predName))
                     );
                 } else {
-                    throw new IllegalStateException("Unbound predicate with non-URI, non-variable object not supported");
+                    throw new IllegalStateException("Unsupported triple " + triple);
                 }
             } else {
-                throw new IllegalStateException("Unbound predicate with non-URI subject not supported");
+                throw new IllegalStateException("Unbound predicate with literal subject is not supported " + triple);
             }
         } else {
             throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
