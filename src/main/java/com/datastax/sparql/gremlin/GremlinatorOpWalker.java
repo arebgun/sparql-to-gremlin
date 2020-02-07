@@ -2,7 +2,6 @@ package com.datastax.sparql.gremlin;
 
 import org.apache.jena.sparql.algebra.Op;
 import org.apache.jena.sparql.algebra.OpVisitor;
-import org.apache.jena.sparql.algebra.OpVisitorByType;
 import org.apache.jena.sparql.algebra.OpWalker;
 import org.apache.jena.sparql.algebra.op.Op2;
 
@@ -31,8 +30,7 @@ public class GremlinatorOpWalker extends OpWalker {
             before(op) ;
             if ( op.getLeft() != null )
                 op.getLeft().visit(this) ;
-//            if ( op.getRight() != null )
-//                op.getRight().visit(this) ;
+            // Right side gets processed in visit(final OpLeftJoin opLeftJoin) where below method bottoms out
             if ( visitor != null )
                 op.visit(visitor) ;
             after(op) ;

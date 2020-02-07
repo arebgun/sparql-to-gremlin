@@ -177,6 +177,23 @@ public class TraversalBuilder {
                         __.match(__.as(subjLabel).outE().as(subjLabel).otherV().hasId(objValue),
                             __.as(subjLabel).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("eps")).by(T.label).as(predName))
                     );
+                } else if (object.isLiteral()) {
+                    Object objValue = object.getLiteralValue();
+
+                    return __.as(subjLabel).union(
+                        // starting with a vertex
+                        __.match(__.as(subjLabel).hasId(objValue).constant("v:id").as(predName)),
+                        __.match(__.as(subjLabel).hasLabel(objValue.toString()).constant("v:label").as(predName)),
+                        __.match(__.as(subjLabel).properties().as(propStepName).value().is(objValue),
+                            __.as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName)),
+
+                        // starting with an edge
+                        __.match(__.as(subjLabel).outE().as(subjLabel).hasId(objValue).constant("v:id").as(predName)),
+                        __.match(__.as(subjLabel).outE().as(subjLabel).hasLabel(objValue.toString()).constant("v:label").as(predName)),
+                        __.match(__.as(subjLabel).outE().as(subjLabel).properties().as(propStepName).value().is(objValue),
+                            // for some reason using T.key instead of __.as(propStepName).key() resulted in error
+                            __.as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(__.as(propStepName).key()).as(predName))
+                    );
                 } else {
                     throw new IllegalStateException("Unbound predicate with non-URI, non-variable object not supported");
                 }

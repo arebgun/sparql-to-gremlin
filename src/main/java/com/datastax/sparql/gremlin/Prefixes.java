@@ -87,4 +87,8 @@ public class Prefixes {
     public static String createVertexIdUri(String vertexId) {
         return BASE_URI + "vertex-id#" + vertexId;
     }
+
+    public static String createEdgeIdUri(String edgeId) {
+        return BASE_URI + "edge#" + edgeId;
+    }
 }
