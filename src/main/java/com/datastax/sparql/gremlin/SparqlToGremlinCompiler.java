@@ -67,17 +67,17 @@ import java.util.stream.Stream;
  */
 public class SparqlToGremlinCompiler {
 	private static final Logger logger = LoggerFactory.getLogger(SparqlToGremlinCompiler.class);
+	public static final String OPTIONAL_DEFAULT_RESULT = "N/A";
 
 	private GraphTraversal<Vertex, ?> traversal;
 
 	private List<Traversal> traversalList = new ArrayList<>();
-	private List<Traversal> optionalTraversals = new ArrayList<>();
+	private List<List<Traversal>> optionalTraversals = new ArrayList<>();
 	private List<String> optionalVariable = new ArrayList<>();
     private Map<Object, UUID> vertexIdToUuid = new HashMap<>();
 
     private boolean optionalFlag = false;
 
-	private GraphTraversalSource temp;
 	private Graph graph;
 
 	private SparqlToGremlinCompiler(final GraphTraversal<Vertex, ?> traversal) {
@@ -86,7 +86,6 @@ public class SparqlToGremlinCompiler {
 
 	private SparqlToGremlinCompiler(final GraphTraversalSource g) {
 		this(g.V());
-		temp = g;
 	}
 
 	private SparqlToGremlinCompiler(final Graph g) {
@@ -101,13 +100,13 @@ public class SparqlToGremlinCompiler {
 		// creates a map of ordering keys and their ordering direction
 		final Map<String, Order> orderingIndex = createOrderIndexFromQuery(query);
 
-		Traversal[] t = new Traversal[traversalList.size()];
 		if (traversalList.size() > 0)
-			traversal = traversal.match(traversalList.toArray(t));
+			traversal = traversal.match(traversalList.toArray(new Traversal[0]));
 
 		for (int i = 0; i < optionalTraversals.size(); i++) {
 			String optVarName = optionalVariable.get(i).substring(1);
-			traversal = traversal.coalesce(__.match(optionalTraversals.get(i)).select(optVarName), (Traversal) __.constant("N/A"));
+			Traversal[] matchTraversals = optionalTraversals.get(i).toArray(new Traversal[0]);
+			traversal = traversal.coalesce(__.match(matchTraversals).select(optVarName), (Traversal) __.constant(OPTIONAL_DEFAULT_RESULT));
 			traversal = traversal.as(optVarName);
 		}
 
@@ -217,6 +216,7 @@ public class SparqlToGremlinCompiler {
 	 */
 	private class GremlinOpVisitor extends OpVisitorBase {
 
+		private List<Traversal> optionalBlock = new ArrayList<>();
 		/**
 		 * Visiting triple patterns in SPARQL algebra.
 		 */
@@ -230,7 +230,7 @@ public class SparqlToGremlinCompiler {
 			if(optionalFlag)
 			{
 				triples.forEach(triple ->
-                    optionalTraversals.add(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid)));
+                    optionalBlock.add(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid)));
 
 				triples.forEach(triple ->
                     optionalVariable.add(triple.getObject().toString()));
@@ -266,10 +266,12 @@ public class SparqlToGremlinCompiler {
 				for (Expr expr : opLeftJoin.getExprs().getList()) {
 					if (expr != null) {
 						if (optionalFlag)
-							optionalTraversals.add(__.where(WhereTraversalBuilder.transform(expr, vertexIdToUuid)));
+							optionalBlock.add(__.where(WhereTraversalBuilder.transform(expr, vertexIdToUuid)));
 					}
 				}
 			}
+			optionalTraversals.add(optionalBlock);
+			optionalBlock = new ArrayList<>();
 		}
 
 		/**

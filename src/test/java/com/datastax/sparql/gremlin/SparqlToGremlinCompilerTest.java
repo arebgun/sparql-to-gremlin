@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.datastax.sparql.gremlin.SparqlToGremlinCompiler.OPTIONAL_DEFAULT_RESULT;
 import static com.datastax.sparql.gremlin.SparqlToGremlinCompiler.compile;
 import static com.datastax.sparql.gremlin.TraversalBuilder.PREDICATE_KEY_NAME;
 import static com.datastax.sparql.gremlin.TraversalBuilder.PREFIX_KEY_NAME;
@@ -380,6 +381,48 @@ public class SparqlToGremlinCompilerTest {
         List resultActual = actual.toList();
 
         assertEquals(resultExpected, resultActual);
+    }
+
+    @Test
+    public void testGotg_DoubleOptional_WithUnboundPred() {
+        String query =
+            "SELECT ?SUBJ ?OBJ ?OBJ_NAME ?OBJ_AGE " +
+            "WHERE { " +
+                "?SUBJ e:brother ?OBJ . " +
+                "OPTIONAL { " +
+                    "?OBJ v:name ?OBJ_NAME . " +
+                "} . " +
+                "OPTIONAL { " +
+                    "?OBJ v:age ?OBJ_AGE . " +
+                    "FILTER (?OBJ_AGE >= 5000) ." +
+                "} " +
+            "}";
+
+        GraphTraversal actual = compile(gotg, query);
+
+        /*
+         [
+          {SUBJ=v[4], OBJ=v[5], OBJ_NAME=neptune, OBJ_AGE=N/A},
+          {SUBJ=v[4], OBJ=v[8], OBJ_NAME=pluto, OBJ_AGE=N/A},
+          {SUBJ=v[5], OBJ=v[4], OBJ_NAME=jupiter, OBJ_AGE=5000},
+          {SUBJ=v[5], OBJ=v[8], OBJ_NAME=pluto, OBJ_AGE=N/A},
+          {SUBJ=v[8], OBJ=v[4], OBJ_NAME=jupiter, OBJ_AGE=5000},
+          {SUBJ=v[8], OBJ=v[5], OBJ_NAME=neptune, OBJ_AGE=N/A}
+         ]
+        */
+        List<Map<String, Object>> resultActual = actual.toList();
+
+        assertEquals(resultActual.size(), 6);
+
+        for (Map<String, Object> binding : resultActual) {
+            Object age = binding.get("OBJ_AGE");
+
+            if (age instanceof Integer) {
+                assertTrue((int) age >= 5000);
+            } else {
+                assertEquals(OPTIONAL_DEFAULT_RESULT, age);
+            }
+        }
     }
 
     @Test
