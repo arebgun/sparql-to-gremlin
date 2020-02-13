@@ -25,14 +25,14 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.datastax</groupId>
     <artifactId>sparql-gremlin</artifactId>
-    <version>0.2</version>
+    <version>0.3-SNAPSHOT</version>
     <name>SPARQL-Gremlin: Compiler for SPARQL to the Gremlin Traversal Machine</name>
     <url>https://github.com/LITMUS-Benchmark-Suite/sparql-to-gremlin</url>
     <licenses>
-    <license>
-     <name>The Apache Software License, Version 2.0</name>
-     <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
-    </license>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
     </licenses>
     <organization>
         <name>WDAQUA-ITN</name>
@@ -45,29 +45,35 @@
             <organization>University of Bonn</organization>
             <organizationUrl>http://harshthakkar.in</organizationUrl>
         </developer>
-      <developer>
+        <developer>
             <name>Dharmen Punjani</name>
             <email>dharmen.punjani@gmail.com</email>
             <organization>National and Kapodistrian University of Athens</organization>
             <organizationUrl>http://wdaqua.eu/students/dharmen-punjani</organizationUrl>
         </developer>
+        <developer>
+            <name>Antons Rebguns</name>
+            <email>arebguns@cyc.com</email>
+            <organization>Cycorp Inc.</organization>
+            <organizationUrl>http://www.cyc.com</organizationUrl>
+        </developer>
     </developers>
     <scm>
-    <connection>scm:git:git://github.com/LITMUS-Benchmark-Suite/sparql-to-gremlin.git</connection>
-    <developerConnection>scm:git:ssh://github.com/LITMUS-Benchmark-Suite/sparql-to-gremlin.git</developerConnection>
-    <url>http://github.com/LITMUS-Benchmark-Suite/sparql-to-gremlin/tree/master</url>
+        <connection>scm:git:git://github.com/LITMUS-Benchmark-Suite/sparql-to-gremlin.git</connection>
+        <developerConnection>scm:git:ssh://github.com/LITMUS-Benchmark-Suite/sparql-to-gremlin.git</developerConnection>
+        <url>http://github.com/LITMUS-Benchmark-Suite/sparql-to-gremlin/tree/master</url>
     </scm>
 
     <distributionManagement>
-	  <snapshotRepository>
-	   <id>ossrh</id>
-	   <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-	  </snapshotRepository>
-	  <repository>
-	   <id>ossrh</id>
-	   <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-	  </repository>
-	 </distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>
+    </distributionManagement>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -75,7 +81,7 @@
         <commons-io.version>2.4</commons-io.version>
         <jena.version>3.0.0</jena.version>
         <junit.version>4.12</junit.version>
-        <tinkerpop.version>3.3.3</tinkerpop.version>
+        <tinkerpop.version>3.4.5</tinkerpop.version>
         <query.dir>src/test/resources/sparql/queries</query.dir>
     </properties>
 
@@ -95,6 +101,13 @@
             <artifactId>tinkergraph-gremlin</artifactId>
             <version>${tinkerpop.version}</version>
         </dependency>
+
+        <dependency>
+            <groupId>org.apache.tinkerpop</groupId>
+            <artifactId>gremlin-driver</artifactId>
+            <version>${tinkerpop.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.jena</groupId>
             <artifactId>apache-jena-libs</artifactId>
@@ -121,7 +134,7 @@
     </dependencies>
 
     <build>
-     <directory>${basedir}/target</directory>
+        <directory>${basedir}/target</directory>
         <finalName>${project.artifactId}-${project.version}</finalName>
         <resources>
             <resource>
@@ -129,61 +142,61 @@
                 </directory>
             </resource>
         </resources>
-     <plugins>
+        <plugins>
             <plugin>
-		    <groupId>org.apache.maven.plugins</groupId>
-		    <artifactId>maven-source-plugin</artifactId>
-		    <version>2.2.1</version>
-		    <executions>
-		     <execution>
-		      <id>attach-sources</id>
-		      <goals>
-		       <goal>jar-no-fork</goal>
-		      </goals>
-		     </execution>
-		    </executions>
-		   </plugin>
-<!--		   <plugin>
-		        <groupId>org.apache.maven.plugins</groupId>
-		        <artifactId>maven-gpg-plugin</artifactId>
-		        <executions>
-		          <execution>
-		            <id>sign-artifacts</id>
-					<phase>verify</phase>
-		            <goals>
-		              <goal>sign</goal>
-		            </goals>
-		            <configuration>
-                <gpgArguments>
-                    <arg>&#45;&#45;pinentry-mode</arg>
-                    <arg>loopback</arg>
-                </gpgArguments>
-            </configuration>
-		          </execution>
-		        </executions>
-		</plugin>-->
-             <plugin>
-                 <groupId>org.apache.maven.plugins</groupId>
-                 <artifactId>maven-compiler-plugin</artifactId>
-                 <version>3.3</version>
-                 <configuration>
-                     <source>1.8</source>
-                     <target>1.8</target>
-                 </configuration>
-             </plugin>
-             <plugin>
-                 <artifactId>maven-jar-plugin</artifactId>
-                 <version>2.6</version>
-                 <configuration>
-                     <archive>
-                         <manifest>
-                             <addClasspath>true</addClasspath>
-                             <classpathPrefix>lib/</classpathPrefix>
-                             <mainClass>com.datastax.sparql.ConsoleCompiler</mainClass>
-                         </manifest>
-                     </archive>
-                 </configuration>
-             </plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>2.2.1</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--		   <plugin>
+                            <groupId>org.apache.maven.plugins</groupId>
+                            <artifactId>maven-gpg-plugin</artifactId>
+                            <executions>
+                              <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                  <goal>sign</goal>
+                                </goals>
+                                <configuration>
+                            <gpgArguments>
+                                <arg>&#45;&#45;pinentry-mode</arg>
+                                <arg>loopback</arg>
+                            </gpgArguments>
+                        </configuration>
+                              </execution>
+                            </executions>
+                    </plugin>-->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.3</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>2.6</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <addClasspath>true</addClasspath>
+                            <classpathPrefix>lib/</classpathPrefix>
+                            <mainClass>com.datastax.sparql.ConsoleCompiler</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -253,18 +266,18 @@
                 </configuration>
             </plugin>
             <plugin>
-		    <groupId>org.apache.maven.plugins</groupId>
-		    <artifactId>maven-javadoc-plugin</artifactId>
-		    <version>2.9.1</version>
-		    <executions>
-		     <execution>
-		      <id>attach-javadocs</id>
-		      <goals>
-		       <goal>jar</goal>
-		      </goals>
-		     </execution>
-		    </executions>
-		   </plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>2.9.1</version>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
     <reporting>

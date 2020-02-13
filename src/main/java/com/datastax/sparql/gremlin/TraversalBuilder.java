@@ -19,12 +19,12 @@
 
 package com.datastax.sparql.gremlin;
 
+import com.datastax.sparql.graph.LambdaHelper;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.Triple;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 import org.apache.tinkerpop.gremlin.structure.PropertyType;
-import org.apache.tinkerpop.gremlin.structure.T;
 
 import java.util.Map;
 import java.util.UUID;
@@ -36,7 +36,7 @@ public class TraversalBuilder {
     public static String PREFIX_KEY_NAME = "GREMLINATOR_PREFIX_KEYNAME";
     public static String PREDICATE_KEY_NAME = "GREMLINATOR_PREDICATE_KEYNAME";
 
-    public static GraphTraversal<?, ?> transform(final Triple triple, boolean invertEdge, Map<Object, UUID> vertexIdToUuid) {
+    public static GraphTraversal transform(final Triple triple, boolean invertEdge, Map<Object, UUID> vertexIdToUuid, LambdaHelper lambdas) {
         final Node subject = invertEdge ? triple.getObject() : triple.getSubject();
         final Node object = invertEdge ? triple.getSubject() : triple.getObject();
         final Node predicate = triple.getPredicate();
@@ -53,7 +53,7 @@ public class TraversalBuilder {
             throw new IllegalStateException(String.format("Unexpected subject type: %s", subject));
         }
 
-        GraphTraversal<?, ?> matchTraversal;
+        GraphTraversal matchTraversal;
 
         if (subject.isConcrete()) {
             UUID uuid = vertexIdToUuid.computeIfAbsent(subjectValue, v -> UUID.randomUUID());
@@ -62,7 +62,7 @@ public class TraversalBuilder {
             matchTraversal = __.as(subjectValue.toString());
         }
 
-        Function<String, GraphTraversal<?, ?>> fn = invertEdge ? matchTraversal::in : matchTraversal::out;
+        Function<String, GraphTraversal> fn = invertEdge ? matchTraversal::in : matchTraversal::out;
 
         if (predicate.isURI()) {
             final String predicateUri = predicate.getURI();
@@ -88,16 +88,29 @@ public class TraversalBuilder {
                     } else {
                         return matchTraversal.outE(predicateName).as(object.getName());
                     }
-                case "edge-proposition-subject":
-                    if (object.isConcrete()) {
-                        throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
-                    } else {
+                case "edge-proposition-subject":  // <eid> eps:edge_label <vid>
+                    if (object.isURI()) {
+                        if (Prefixes.isValidVertexIdUri(object.getURI())) {
+                            String sv = subject.isConcrete()
+                                ? vertexIdToUuid.computeIfAbsent(subjectValue, v -> UUID.randomUUID()).toString()
+                                : subjectValue.toString();
+                            return matchTraversal.choose(lambdas.getType())
+                                .option("vertex", __.select(sv).outE().inV().hasId(getUriValueFromVertexNode(object)))
+                                .option("edge", __.select(sv).inV().hasId(getUriValueFromVertexNode(object)));
+                        } else {
+                            throw new IllegalStateException(String.format("Unsupported object type for %s - %s", predicate, object));
+                        }
+                    } else if (object.isLiteral()) {
+                        throw new IllegalStateException(String.format("Unsupported object type for %s - %s", predicate, object));
+                    } else if (object.isVariable()) {
                         return matchTraversal.inV().as(object.getName());
+                    } else {
+                        throw new IllegalStateException(String.format("Unsupported object type for %s - %s", predicate, object));
                     }
                 case "property":
-                    return matchProperty(matchTraversal, predicateName, PropertyType.PROPERTY, object);
+                    return matchProperty(matchTraversal, predicateName, PropertyType.PROPERTY, object, subjectValue, lambdas);
                 case "value":
-                    return matchProperty(matchTraversal, predicateName, PropertyType.VALUE, object);
+                    return matchProperty(matchTraversal, predicateName, PropertyType.VALUE, object, subjectValue, lambdas);
                 default:
                     throw new IllegalStateException(String.format("Unexpected predicate: %s", predicate));
             }
@@ -119,31 +132,30 @@ public class TraversalBuilder {
 
                             return __.as(subjLabel).hasId(subjectValue).union(
                                 // starting with a vertex
-                                __.match(__.as(subjLabel).hasId(objValue).constant("v:id").as(predName)),
-                                __.match(__.as(subjLabel).hasLabel(objValue.toString()).constant("v:label").as(predName)),
-                                __.match(__.as(subjLabel).properties().as(propStepName).value().is(objValue),
-                                    __.as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName))
+                                __.hasId(objValue).<Object>constant("v:id").as(predName),
+                                __.hasLabel(objValue.toString()).<Object>constant("v:label").as(predName),
+                                __.properties().as(propStepName).value().is(objValue)
+                                    .select(propStepName).key().map(lambdas.v()).as(predName)
                             );
                         } else if (object.isVariable()){ // <vid> ?PRED ?OBJ
                             String objName = object.getName();
 
                             return __.as(subjLabel).hasId(subjectValue).union(
-                                __.match(__.as(subjLabel).id().as(objName).constant("v:id").as(predName)),
-                                __.match(__.as(subjLabel).label().as(objName).constant("v:label").as(predName)),
-                                __.match(__.as(subjLabel).properties().as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName),
-                                    __.as(propStepName).value().as(objName)),
-                                __.match(__.as(subjLabel).properties().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("p")).by(T.key).as(predName)),
-                                __.match(__.as(subjLabel).outE().as(edgeStepName).otherV().as(objName),
-                                    __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)),
-                                __.match(__.as(subjLabel).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label).as(predName))
+                                __.id().as(objName).<Object>constant("v:id").as(predName),
+                                __.label().as(objName).<Object>constant("v:label").as(predName),
+                                __.properties().as(propStepName).key().map(lambdas.v()).as(predName)
+                                    .select(propStepName).value().as(objName),
+                                __.properties().as(objName).key().map(lambdas.p()).as(predName),
+                                __.outE().as(edgeStepName).otherV().as(objName)
+                                    .select(edgeStepName).label().map(lambdas.e()).as(predName),
+                                __.outE().as(objName).label().map(lambdas.ep()).as(predName)
                             );
                         } else if (object.isURI()) { // <vid> ?PRED <vid>
                             String objValue = getUriValueFromVertexNode(object);
 
-                            return __.as(subjLabel).hasId(subjectValue).match(
-                                __.as(subjLabel).outE().as(edgeStepName).otherV().hasId(objValue),
-                                __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)
-                            );
+                            return __.as(subjLabel).hasId(subjectValue)
+                                .select(subjLabel).outE().as(edgeStepName).otherV().hasId(objValue)
+                                .select(edgeStepName).label().map(lambdas.e()).as(predName);
                         }
                     default:
                         throw new IllegalStateException("Unbound predicate with non vertex URI subject is not supported");
@@ -155,42 +167,57 @@ public class TraversalBuilder {
                     String objName = object.getName();
 
                     return __.as(subjLabel).union(
-                        __.match(__.as(subjLabel).id().as(objName).constant("v:id").as(predName)),
-                        __.match(__.as(subjLabel).label().as(objName).constant("v:label").as(predName)),
-                        __.match(__.as(subjLabel).properties().as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName),
-                            __.as(propStepName).value().as(objName)),
-                        __.match(__.as(subjLabel).properties().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("p")).by(T.key).as(predName)),
-                        __.match(__.as(subjLabel).outE().as(edgeStepName).otherV().as(objName),
-                            __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)),
-                        __.match(__.as(subjLabel).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label).as(predName)),
-                        __.match(__.as(subjLabel).outE().as(objName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("eps")).by(T.label).as(predName))
+                        // common for all
+                        __.id().as(objName).<Object>constant("v:id").as(predName),
+                        __.label().as(objName).<Object>constant("v:label").as(predName),
+                        __.properties().as(propStepName).key().map(lambdas.v()).as(predName)
+                            .select(propStepName).value().as(objName),
+                        __.properties().as(objName).key().map(lambdas.p()).as(predName),
+
+                        // <vid as SUBJ_NAME> <e:eid.label as PRED_NAME> <eid.otherV as OBJ_NAME>
+                        __.choose(lambdas.isVertex(),
+                            __.outE().as(edgeStepName).otherV().as(objName)
+                                .select(edgeStepName).label().map(lambdas.e()).as(predName)),
+
+                        // <vid as SUBJ_LABEL> <ep:eid.label as PRED_NAME> <eid as OBJ_NAME>
+                        __.choose(lambdas.isVertex(),
+                            __.outE().as(objName).label().map(lambdas.ep()).as(predName)),
+
+                        // <eid as SUBJ_LABEL> <eps:eid.label as PRED_NAME> <eid.otherV as OBJ_NAME>
+                        __.choose(lambdas.isVertex(),
+                            __.outE().as(subjLabel).otherV().as(objName)
+                                .select(subjLabel).label().map(lambdas.eps()).as(predName))
                     );
                 } else if (object.isURI()) { // ?SUBJ ?PRED <vid uri>
                     String objValue = getUriValueFromVertexNode(object);
 
                     return __.as(subjLabel).union(
-                        __.match(__.as(subjLabel).outE().as(edgeStepName).otherV().hasId(objValue),
-                            __.as(edgeStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as(predName)),
-                        __.match(__.as(subjLabel).outE().as(subjLabel).otherV().hasId(objValue),
-                            __.as(subjLabel).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("eps")).by(T.label).as(predName))
+                        // ?SUBJ is an edge
+                        // ?SUBJ is a vertex
+                        __.outE().as(edgeStepName).otherV().hasId(objValue)
+                            .select(edgeStepName).label().map(lambdas.e()).as(predName),
+                        __.outE().as(subjLabel).otherV().hasId(objValue)
+                            .select(subjLabel).label().map(lambdas.eps()).as(predName)
                     );
                 } else if (object.isLiteral()) { // ?SUBJ ?PRED <string|int|etc>
+                    // can be
+                    // 1. <vid> <v:vertexPropertyValue> <literal>
+                    // 2. <eid> <v:edgePropertyValue> <literal>
+                    // 3. <pid> <v:propertyPropertyValue> <literal>
                     Object objValue = object.getLiteralValue();
 
                     return __.as(subjLabel).union(
-                        // starting with a vertex
-                        __.match(__.as(subjLabel).hasId(objValue).constant("v:id").as(predName)),
-                        __.match(__.as(subjLabel).hasLabel(objValue.toString()).constant("v:label").as(predName)),
-                        __.match(__.as(subjLabel).properties().as(propStepName).value().is(objValue),
-                            __.as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key).as(predName)),
+                        // starting with a vertex or edge
+                        __.hasId(objValue).<Object>constant("v:id").as(predName),
+                        __.hasLabel(objValue.toString()).<Object>constant("v:label").as(predName),
+                        __.properties().as(propStepName).value().is(objValue)
+                            .select(propStepName).key().map(lambdas.v()).as(predName),
 
                         // starting with an edge
-                        __.match(__.as(subjLabel).outE().as(subjLabel).hasId(objValue).constant("v:id").as(predName)),
-                        __.match(__.as(subjLabel).outE().as(subjLabel).hasLabel(objValue.toString()).constant("v:label").as(predName)),
-                        __.match(__.as(subjLabel).outE().as(subjLabel).properties().as(propStepName).value().is(objValue),
-                            // for some reason using T.key instead of __.as(propStepName).key() resulted in error
-                            __.as(propStepName).project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(__.as(propStepName).key()).as(predName))
-                    );
+                        __.outE().as(subjLabel).hasId(objValue).<Object>constant("v:id").as(predName),
+                        __.outE().as(subjLabel).hasLabel(objValue.toString()).<Object>constant("v:label").as(predName),
+                        __.outE().as(subjLabel).properties().as(propStepName).value().is(objValue)
+                            .select(propStepName).key().map(lambdas.v()).as(predName));
                 } else {
                     throw new IllegalStateException("Unsupported triple " + triple);
                 }
@@ -212,17 +239,18 @@ public class TraversalBuilder {
         return Prefixes.getURIValue(nodeUri);
     }
 
-    private static GraphTraversal<?, ?> matchProperty(final GraphTraversal<?, ?> traversal, final String propertyName,
-                                                      final PropertyType type, final Node object) {
+    private static GraphTraversal matchProperty(final GraphTraversal traversal, final String propertyName,
+                                                      final PropertyType type, final Node object,
+                                                      final Object subjectValue, final LambdaHelper lambdas) {
         switch (propertyName) {
             case "id":
                 return object.isConcrete()
-                    ? traversal.hasId(object.getLiteralValue())
-                    : traversal.id().as(object.getName());
+                    ? traversal.choose(lambdas.isElement()).option(true, __.hasId(object.getLiteralValue()))
+                    : traversal.choose(lambdas.isElement()).option(true, __.id().as(object.getName()));
             case "label":
                 return object.isConcrete()
-                    ? traversal.hasLabel(object.getLiteralValue().toString())
-                    : traversal.label().as(object.getName());
+                    ? traversal.choose(lambdas.isElement()).option(true, __.hasLabel(object.getLiteralValue().toString()))
+                    : traversal.choose(lambdas.isElement()).option(true, __.label().as(object.getName()));
             case "key":
                 return object.isConcrete()
                     ? traversal.hasKey(object.getLiteralValue().toString())

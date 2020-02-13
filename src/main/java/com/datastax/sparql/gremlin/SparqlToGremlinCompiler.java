@@ -19,6 +19,7 @@
 
 package com.datastax.sparql.gremlin;
 
+import com.datastax.sparql.graph.LambdaHelper;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.query.ParameterizedSparqlString;
@@ -70,6 +71,7 @@ public class SparqlToGremlinCompiler {
 	public static final String OPTIONAL_DEFAULT_RESULT = "N/A";
 
 	private GraphTraversal<Vertex, ?> traversal;
+	private LambdaHelper lambdas;
 
 	private List<Traversal> traversalList = new ArrayList<>();
 	private List<List<Traversal>> optionalTraversals = new ArrayList<>();
@@ -82,10 +84,16 @@ public class SparqlToGremlinCompiler {
 
 	private SparqlToGremlinCompiler(final GraphTraversal<Vertex, ?> traversal) {
 		this.traversal = traversal;
+		this.lambdas = new LambdaHelper.NativeJavaLambdas();
 	}
 
 	private SparqlToGremlinCompiler(final GraphTraversalSource g) {
 		this(g.V());
+	}
+
+	private SparqlToGremlinCompiler(final GraphTraversalSource g, LambdaHelper.Type executionType) {
+		this(g.V());
+		this.lambdas = executionType == LambdaHelper.Type.LOCAL ? new LambdaHelper.NativeJavaLambdas() : new LambdaHelper.RemoteGroovyLambdas();
 	}
 
 	private SparqlToGremlinCompiler(final Graph g) {
@@ -204,7 +212,7 @@ public class SparqlToGremlinCompiler {
 
 				// by default, the sort will be ascending. getDirection() returns -2 if the DESC/ASC isn't
 				// supplied - weird
-				orderingIndex.put(expr.getVarName(), sortCondition.getDirection() == -1 ? Order.decr : Order.incr);
+				orderingIndex.put(expr.getVarName(), sortCondition.getDirection() == -1 ? Order.desc : Order.asc);
 			}
 		}
 
@@ -230,13 +238,13 @@ public class SparqlToGremlinCompiler {
 			if(optionalFlag)
 			{
 				triples.forEach(triple ->
-                    optionalBlock.add(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid)));
+                    optionalBlock.add(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid, lambdas)));
 
 				triples.forEach(triple ->
                     optionalVariable.add(triple.getObject().toString()));
 			} else {
 				triples.forEach(triple ->
-                    traversalList.add(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid)));
+                    traversalList.add(TraversalBuilder.transform(triple, tripleRequiresEdgeInversion(triple, visitedNodes), vertexIdToUuid, lambdas)));
 			}
 		}
 
@@ -248,7 +256,7 @@ public class SparqlToGremlinCompiler {
 			Traversal traversal;
 			for (Expr expr : opFilter.getExprs().getList()) {
 				if (expr != null) {
-					traversal = __.where(WhereTraversalBuilder.transform(expr, vertexIdToUuid));
+					traversal = __.where(WhereTraversalBuilder.transform(expr, vertexIdToUuid, lambdas));
 					traversalList.add(traversal);
 				}
 			}
@@ -266,7 +274,7 @@ public class SparqlToGremlinCompiler {
 				for (Expr expr : opLeftJoin.getExprs().getList()) {
 					if (expr != null) {
 						if (optionalFlag)
-							optionalBlock.add(__.where(WhereTraversalBuilder.transform(expr, vertexIdToUuid)));
+							optionalBlock.add(__.where(WhereTraversalBuilder.transform(expr, vertexIdToUuid, lambdas)));
 					}
 				}
 			}
@@ -317,21 +325,29 @@ public class SparqlToGremlinCompiler {
 		return compile(gts, query);
 	}
 
+	public static GraphTraversal<Vertex, ?> convertToGremlinTraversal(final GraphTraversalSource gts, final String query, LambdaHelper.Type execType) {
+		return compile(gts, query, execType);
+	}
+
 	public static GraphTraversal<Vertex, ?> compile(final Graph graph, final String query) {
-		String pquery = Prefixes.prepend(query);
-		ParameterizedSparqlString pss = new ParameterizedSparqlString(pquery, PrefixMapping.Standard);
-		Query q = QueryFactory.create(pss.toString(), Syntax.syntaxSPARQL);
-		return new SparqlToGremlinCompiler(graph.traversal()).compile(q);
+		return compile(graph.traversal(), query);
 	}
 
 	public static GraphTraversal<Vertex, ?> compile(final GraphTraversalSource gts, final String query) {
-		String pquery = Prefixes.prepend(query);
-		ParameterizedSparqlString pss = new ParameterizedSparqlString(pquery, PrefixMapping.Standard);
-		Query q = QueryFactory.create(pss.toString(), Syntax.syntaxSPARQL);
-		return new SparqlToGremlinCompiler(gts).compile(q);
+		return new SparqlToGremlinCompiler(gts).compile(getParameterizedQuery(query));
 	}
 
-    private List<Triple> reorderTriplesWrtProperties(List<Triple> triples) {
+	public static GraphTraversal<Vertex, ?> compile(final GraphTraversalSource gts, final String query, LambdaHelper.Type execType) {
+		return new SparqlToGremlinCompiler(gts,execType).compile(getParameterizedQuery(query));
+	}
+
+	private static Query getParameterizedQuery(String query) {
+		String pquery = Prefixes.prepend(query);
+		ParameterizedSparqlString pss = new ParameterizedSparqlString(pquery, PrefixMapping.Standard);
+		return QueryFactory.create(pss.toString(), Syntax.syntaxSPARQL);
+	}
+
+	private List<Triple> reorderTriplesWrtProperties(List<Triple> triples) {
         List<Triple> edges = new ArrayList<>();
         List<Triple> eps = new ArrayList<>();
         List<Triple> propsAndValues = new ArrayList<>();

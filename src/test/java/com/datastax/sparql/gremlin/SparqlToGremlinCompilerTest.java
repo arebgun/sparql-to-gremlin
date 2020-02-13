@@ -20,35 +20,32 @@
 package com.datastax.sparql.gremlin;
 
 import com.datastax.sparql.graph.GraphFactory;
+import com.datastax.sparql.graph.LambdaHelper;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.jena.sparql.ARQConstants;
+import org.apache.tinkerpop.gremlin.driver.Cluster;
+import org.apache.tinkerpop.gremlin.driver.remote.DriverRemoteConnection;
 import org.apache.tinkerpop.gremlin.process.traversal.Order;
 import org.apache.tinkerpop.gremlin.process.traversal.P;
 import org.apache.tinkerpop.gremlin.process.traversal.Traversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
-import org.apache.tinkerpop.gremlin.process.traversal.step.util.BulkSet;
+import org.apache.tinkerpop.gremlin.structure.Edge;
 import org.apache.tinkerpop.gremlin.structure.Graph;
-import org.apache.tinkerpop.gremlin.structure.T;
-import org.apache.tinkerpop.gremlin.util.function.Lambda;
-import org.hamcrest.core.IsCollectionContaining;
+import org.apache.tinkerpop.gremlin.structure.Vertex;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static com.datastax.sparql.gremlin.SparqlToGremlinCompiler.OPTIONAL_DEFAULT_RESULT;
 import static com.datastax.sparql.gremlin.SparqlToGremlinCompiler.compile;
-import static com.datastax.sparql.gremlin.TraversalBuilder.PREDICATE_KEY_NAME;
-import static com.datastax.sparql.gremlin.TraversalBuilder.PREFIX_KEY_NAME;
+import static org.apache.tinkerpop.gremlin.process.traversal.AnonymousTraversalSource.traversal;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class SparqlToGremlinCompilerTest {
@@ -58,53 +55,9 @@ public class SparqlToGremlinCompilerTest {
     private GraphTraversalSource mc, cc;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         gotg = GraphFactory.createGraphOfTheGods();
         gg = gotg.traversal();
-    }
-
-    @Test
-    public void testGotgGetAllLabels() {
-        String query = "SELECT DISTINCT ?PRED { ?X ?PRED ?Y. }";
-        // oh, so good!
-        GraphTraversal expected = gg.V(4).union(
-            __.match(__.as("SUBJ").outE().as("PRED").otherV().as("OTHER")),
-            __.match(__.as("SUBJ").properties().as("PRED").value().as("OTHER")),
-            __.project("PRED", "OTHER").by(__.constant("label")).by(T.label),
-            __.project("PRED", "OTHER").by(__.constant("id")).by(T.id)
-        ).select("PRED", "OTHER");
-        System.out.println(expected.toList());
-
-        expected = gg.V().match(
-            __.as("SUBJ").union(
-                __.match(__.as("SUBJ").outE().as("PRED").otherV().as("OTHER")),
-                __.match(__.as("SUBJ").properties().as("PRED").value().as("OTHER")),
-                __.match(__.as("SUBJ").label().as("OTHER"),
-                         __.as("SUBJ").constant("label").as("PRED")),
-                __.match(__.as("SUBJ").id().as("OTHER"),
-                         __.as("SUBJ").constant("id").as("PRED")))
-        ).select("SUBJ", "PRED", "OTHER");
-        System.out.println(expected);
-        System.out.println(expected.toList());
-
-//        System.out.println(gg.V(4).inject().toList());
-        // SELECT ?PRED, ?OTHER { vid:4 ?PRED ?OTHER . }
-        // [ { E[father], V1 }, { E[lives], V2 }, { VP[name], "jupiter" }, { VP[age], 5000 } ]
-
-        expected = gg.V(4).outE().project("PREFIX", "P").by(__.constant("e:")).by(T.label).as("PRED");
-        System.out.println(expected.toList());
-
-        gg.V().match(
-            __.as("X").out("reviews").as("Y")
-        );
-
-//                query =
-//            "PREFIX vid: <http://northwind.com/model/vertex-id#> " +
-//            "SELECT ?SUBJ ?PRED ?OTHER " +
-//            "WHERE " +
-//            "  { ?SUBJ    ?PRED   ?OTHER . }";
-//        GraphTraversal actual = compile(gotg, query);
-//        System.out.println(actual.toList());
     }
 
     @Test
@@ -115,34 +68,19 @@ public class SparqlToGremlinCompilerTest {
                 "vid:4 ?PRED ?OTHER . " +
             "}";
 
+        LambdaHelper lambdas = new LambdaHelper.NativeJavaLambdas();
+
         GraphTraversal expected = gg.V().match(
             __.as("SUBJ").hasId(4).union(
-                // get Vertex label value
-                __.match(__.as("SUBJ").id().as("OTHER"),
-                    __.as("SUBJ").constant("v:id").as("PRED")),
-
-                // get Vertex id value
-                __.match(__.as("SUBJ").label().as("OTHER"),
-                    __.as("SUBJ").constant("v:label").as("PRED")),
-
-                // get the rest of Vertex property values
-                __.match(__.as("SUBJ").properties().as("PROP"),
-                    __.as("PROP").project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("v")).by(T.key)/*.key().map(name -> "v:" + name)*/.as("PRED"),
-                    __.as("PROP").value().as("OTHER")),
-
-                // get Vertex Properties
-                __.match(__.as("SUBJ").properties().as("OTHER"),
-                    __.as("OTHER").project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("p")).by(T.key)/*.key().map(name -> "p:" + name)*/.as("PRED")),
-
-                // get Vertex outgoing edge label and other vertex
-                __.match(__.as("SUBJ").outE().as("EDGE").otherV().as("OTHER"),
-                    __.as("EDGE").project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label)/*label().map(label -> "e:" + label)*/.as("PRED")),
-
-                // get Vertex outgoing edge label and Edge object (to be used with eps prefix)
-                __.match(__.as("SUBJ").outE().as("OTHER"),
-                    __.as("OTHER").project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("ep")).by(T.label)/*.label().map(label -> "ep:" + label)*/.as("PRED"))
-
-        )).select("PRED", "OTHER");
+                __.id().as("OTHER").<Object>constant("v:id").as("PRED"),
+                __.label().as("OTHER").<Object>constant("v:label").as("PRED"),
+                __.properties().as("RANDOM_UUID_PROPS").key().map(lambdas.v()).as("PRED")
+                    .select("RANDOM_UUID_PROPS").value().as("OTHER"),
+                __.properties().as("OTHER").key().map(lambdas.p()).as("PRED"),
+                __.outE().as("RANDOM_UUID_EDGE").otherV().as("OTHER")
+                    .select("RANDOM_UUID_EDGE").label().map(lambdas.e()).as("PRED"),
+                __.outE().as("OTHER").label().map(lambdas.ep()).as("PRED")))
+            .select("PRED", "OTHER");
 
         GraphTraversal actual = compile(gotg, query);
 
@@ -152,14 +90,141 @@ public class SparqlToGremlinCompilerTest {
         assertEquals(resultExpected, resultActual);
     }
 
-//    @Test
-//    public void testGotgFindPredicatesAndValuesConnectingToE() {
-//        String query = "SELECT ?BATTLE ?PRED ?VALUE WHERE { vid:6 ep:battled ?BATTLE . ?BATTLE ?PRED ?VALUE . }";
-//        GraphTraversal actual = compile(gotg, query);
-//
-//        List resultActual = actual.toList();
-//        System.out.println(resultActual);
-//    }
+    @Test
+    public void testGotg_filterOnUris() {
+        String query =
+            "SELECT ?FOE ?BATTLE ?HERO ?BATTLE_TIME ?FOE_NAME ?HERO_NAME ?BATTLE_PLACE\n" +
+            "WHERE {\n" +
+            "  ?BATTLE eps:battled ?FOE .\n" +
+            "  ?HERO ep:battled ?BATTLE .\n" +
+            "  ?BATTLE v:time ?BATTLE_TIME .\n" +
+            "  ?FOE v:name ?FOE_NAME .\n" +
+            "  ?HERO v:name ?HERO_NAME .\n" +
+            "  ?BATTLE v:place ?BATTLE_PLACE .\n" +
+            "  FILTER (?FOE = vid:9)\n" +
+            "}";
+
+        GraphTraversal actual = compile(gotg, query);
+        List resultActual = actual.toList();
+
+        assertEquals(1, resultActual.size());
+
+        Object bindingSet = resultActual.get(0);
+        assertTrue(bindingSet instanceof Map);
+
+        Map<String, Object> result = (Map<String, Object>) bindingSet;
+
+        Object vertexBinding = result.get("FOE");
+        assertTrue(vertexBinding instanceof Vertex);
+        assertEquals(9, ((Vertex) vertexBinding).id());
+
+        Object edgeBinding = result.get("BATTLE");
+        assertTrue(edgeBinding instanceof Edge);
+        assertEquals(110, ((Edge) edgeBinding).id());
+
+        vertexBinding = result.get("HERO");
+        assertTrue(vertexBinding instanceof Vertex);
+        assertEquals(6, ((Vertex) vertexBinding).id());
+
+        assertEquals(1, result.get("BATTLE_TIME"));
+        assertEquals("nemean", result.get("FOE_NAME"));
+        assertEquals("hercules", result.get("HERO_NAME"));
+        assertEquals("38.1 23.7", result.get("BATTLE_PLACE"));
+    }
+
+    @Test
+    public void testGotg_UnboundSubject_EpsPredicate_UriObject() {
+        String query =
+            "SELECT ?BATTLE " +
+                "WHERE { " +
+                "  ?BATTLE eps:battled vid:9 . " +
+                "}";
+
+        GraphTraversal actual = compile(gotg, query);
+        List resultActual = actual.toList();
+
+        assertEquals(1, resultActual.size());
+        Object battleBinding = resultActual.get(0);
+        assertTrue(battleBinding instanceof Vertex);
+        assertEquals(6, ((Vertex) battleBinding).id());
+    }
+
+    @Test
+    public void testGotg_EdgeToUriObjectViaEp() {
+        String query =
+            "SELECT ?BATTLE ?HERO ?BATTLE_TIME ?HERO_NAME ?BATTLE_PLACE " +
+            "WHERE { " +
+            "  ?BATTLE eps:battled <http://northwind.com/model/vertex-id#9> . " +
+            "  ?HERO ep:battled ?BATTLE . " +
+            "  ?BATTLE v:time ?BATTLE_TIME . " +
+            "  ?HERO v:name ?HERO_NAME . " +
+            "  ?BATTLE v:place ?BATTLE_PLACE . " +
+            "}";
+
+        GraphTraversal actual = compile(gotg, query);
+        List resultActual = actual.toList();
+
+        assertEquals(1, resultActual.size());
+
+        Object bindingSet = resultActual.get(0);
+        assertTrue(bindingSet instanceof Map);
+
+        Map<String, Object> result = (Map<String, Object>) bindingSet;
+
+        Object edgeBinding = result.get("BATTLE");
+        assertTrue(edgeBinding instanceof Edge);
+        assertEquals(110, ((Edge) edgeBinding).id());
+
+        Object vertexBinding = result.get("HERO");
+        assertTrue(vertexBinding instanceof Vertex);
+        assertEquals(6, ((Vertex) vertexBinding).id());
+
+        assertEquals(1, result.get("BATTLE_TIME"));
+        assertEquals("hercules", result.get("HERO_NAME"));
+        assertEquals("38.1 23.7", result.get("BATTLE_PLACE"));
+    }
+
+    @Test
+    public void testGotg_UnboundPredicateIndirect() {
+        String query = "SELECT ?X ?PRED ?Y WHERE { ?X ?PRED ?Y . ?Y v:label 'battled'}";
+        GraphTraversal actual = compile(gotg, query);
+
+        List<Map<String ,Object>> resultActual = actual.toList();
+        assertEquals(3, resultActual.size());
+        resultActual.forEach(b -> assertEquals("ep:battled", b.get("PRED")));
+    }
+
+    @Test
+    public void testGotg_UnboundPredicateIndirect2() {
+        String query = "SELECT ?X ?PRED ?Y WHERE { ?X ?PRED ?Y . ?Y v:id 112}";
+        GraphTraversal actual = compile(gotg, query);
+
+        List<Map<String ,Object>> resultActual = actual.toList();
+        assertEquals(1, resultActual.size());
+        resultActual.forEach(b -> assertEquals("ep:battled", b.get("PRED")));
+    }
+
+    @Test
+    public void testGotgFindPredicatesAndValuesConnectingToE() {
+        String query = "SELECT ?BATTLE ?PRED ?VALUE WHERE { vid:6 ep:battled ?BATTLE . ?BATTLE ?PRED ?VALUE . }";
+        GraphTraversal actual = compile(gotg, query);
+
+        List resultActual = actual.toList();
+
+        int expectedBattleBindingsNum = 3;
+        int expectedBattleEdgePropsNum = 6;  // id, label, time, place, p[time], p[place]
+        int expectedNum = expectedBattleBindingsNum * expectedBattleEdgePropsNum;
+        assertEquals(expectedNum, resultActual.size());
+    }
+
+    @Test
+    public void testGotg_FullyUnboundSentence() {
+        String query = "SELECT DISTINCT ?PRED WHERE { ?X ?PRED ?Y . } LIMIT 5";
+        GraphTraversal actual = compile(gotg, query);
+
+        List resultActual = actual.toList();
+        System.out.println(resultActual);
+    }
 
     @Test
     public void testGotg_VertexUriSubject_UnboundPredicate_VertexUriObject() {
@@ -169,12 +234,7 @@ public class SparqlToGremlinCompilerTest {
         List resultActual = actual.toList();
 
         assertEquals(resultActual.size(), 1);
-        assertEquals(
-            resultActual.get(0),
-            new HashMap<String, String>() {{
-                put(PREFIX_KEY_NAME, "e");
-                put(PREDICATE_KEY_NAME, "lives");
-            }});
+        assertEquals("e:lives", resultActual.get(0));
     }
 
     @Test
@@ -195,13 +255,8 @@ public class SparqlToGremlinCompilerTest {
 
         List resultActual = actual.toList();
 
-        assertEquals(resultActual.size(), 1);
-        assertEquals(
-            resultActual.get(0),
-            new HashMap<String, String>() {{
-                put(PREFIX_KEY_NAME, "v");
-                put(PREDICATE_KEY_NAME, "name");
-            }});
+        assertEquals(1, resultActual.size());
+        assertEquals(resultActual.get(0), "v:name");
     }
 
     @Test
@@ -212,11 +267,7 @@ public class SparqlToGremlinCompilerTest {
         List resultActual = actual.toList();
 
         assertEquals(resultActual.size(), 1);
-        assertEquals(resultActual.get(0),
-            new HashMap<String, String>() {{
-                put(PREFIX_KEY_NAME, "v");
-                put(PREDICATE_KEY_NAME, "age");
-            }});
+        assertEquals("v:age", resultActual.get(0));
     }
 
     @Test
@@ -250,12 +301,7 @@ public class SparqlToGremlinCompilerTest {
 
         assertTrue(result.containsKey("SUBJ"));
         assertTrue(result.containsKey("PRED"));
-        assertEquals(
-            result.get("PRED"),
-            new HashMap<String, String>() {{
-                put(PREFIX_KEY_NAME, "v");
-                put(PREDICATE_KEY_NAME, "name");
-            }});
+        assertEquals("v:name", result.get("PRED"));
     }
 
     @Test
@@ -272,12 +318,7 @@ public class SparqlToGremlinCompilerTest {
 
         assertTrue(result.containsKey("SUBJ"));
         assertTrue(result.containsKey("PRED"));
-        assertEquals(
-            result.get("PRED"),
-            new HashMap<String, String>() {{
-                put(PREFIX_KEY_NAME, "v");
-                put(PREDICATE_KEY_NAME, "age");
-            }});
+        assertEquals("v:age", result.get("PRED"));
     }
 
     @Test
@@ -305,18 +346,13 @@ public class SparqlToGremlinCompilerTest {
 
         List<Map<String, Object>> resultActual = actual.toList();
 
-        assertEquals(resultActual.size(), 1);
+        assertEquals(1, resultActual.size());
 
         Map<String, Object> result = resultActual.get(0);
 
         assertTrue(result.containsKey("SUBJ"));
         assertTrue(result.containsKey("PRED"));
-        assertEquals(
-            result.get("PRED"),
-            new HashMap<String, String>() {{
-                put(PREFIX_KEY_NAME, "v");
-                put(PREDICATE_KEY_NAME, "reason");
-            }});
+        assertEquals(result.get("PRED"), "v:reason");
     }
 
     @Test
@@ -333,33 +369,29 @@ public class SparqlToGremlinCompilerTest {
 
         assertTrue(result.containsKey("SUBJ"));
         assertTrue(result.containsKey("PRED"));
-        assertEquals(result.get("PRED"), "v:id");
+        assertEquals("v:id", result.get("PRED"));
 
         result = resultActual.get(1);
 
         assertTrue(result.containsKey("SUBJ"));
         assertTrue(result.containsKey("PRED"));
 
-        assertEquals(
-            result.get("PRED"),
-            new HashMap<String, String>() {{
-                put(PREFIX_KEY_NAME, "v");
-                put(PREDICATE_KEY_NAME, "time");
-            }});
+        assertEquals("v:time", result.get("PRED"));
     }
 
     @Test
     public void testGotgUnboundPredicateBoundUriObject() {
         String query = "SELECT DISTINCT ?SUBJ ?PRED WHERE { ?SUBJ ?PRED vid:4 . }";
         GraphTraversal actual = compile(gotg, query);
+        LambdaHelper l = new LambdaHelper.NativeJavaLambdas();
 
         GraphTraversal expected = gg.V().match(
             __.as("SUBJ").union(
-                __.match(__.as("SUBJ").outE().as("RANDOM_UUID").otherV().hasId(4),
-                    __.as("RANDOM_UUID").project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("e")).by(T.label).as("PRED")),
-                __.match(__.as("SUBJ").outE().as("SUBJ").otherV().hasId(4),
-                    __.as("SUBJ").project(PREFIX_KEY_NAME, PREDICATE_KEY_NAME).by(__.constant("eps")).by(T.label).as("PRED"))
-            )).select("SUBJ", "PRED");
+                __.outE().as("RANDOM_UUID").otherV().hasId(4)
+                    .select("RANDOM_UUID").label().map(l.e()).as("PRED"),
+                __.outE().as("SUBJ").otherV().hasId(4)
+                    .select("SUBJ").label().map(l.eps()).as("PRED"))
+            ).select("SUBJ", "PRED");
 
         List resultActual = actual.toList();
         List resultExpected = expected.toList();
@@ -374,7 +406,14 @@ public class SparqlToGremlinCompilerTest {
             .coalesce(__.match(__.as("OBJ").values("name").as("OBJ_NAME")), (Traversal)__.constant("N/A")).as("OBJ_NAME")
             .select("SUBJ", "OBJ", "OBJ_NAME", "OBJ_AGE");
 
-        String query = "SELECT ?SUBJ ?OBJ ?OBJ_NAME ?OBJ_AGE WHERE { ?SUBJ e:battled ?OBJ . OPTIONAL { ?OBJ v:name ?OBJ_NAME . } . OPTIONAL { ?OBJ v:age ?OBJ_AGE . } }";
+        String query =
+            "SELECT ?SUBJ ?OBJ ?OBJ_NAME ?OBJ_AGE " +
+            "WHERE { " +
+                "?SUBJ e:battled ?OBJ . " +
+                "OPTIONAL { ?OBJ v:name ?OBJ_NAME . } . " +
+                "OPTIONAL { ?OBJ v:age ?OBJ_AGE . } " +
+            "}";
+
         GraphTraversal actual = compile(gotg, query);
 
         List resultExpected = expected.toList();
@@ -457,7 +496,7 @@ public class SparqlToGremlinCompilerTest {
             __.as("GOD").hasLabel("god"),
             __.as("GOD").values("name").as("NAME"),
             __.as("GOD").values("age").as("AGE")
-        ).order().by(__.select("AGE"), Order.decr).select("GOD", "NAME", "AGE");
+        ).order().by(__.select("AGE"), Order.desc).select("GOD", "NAME", "AGE");
 
         GraphTraversal actual = compile(gotg, query);
 
