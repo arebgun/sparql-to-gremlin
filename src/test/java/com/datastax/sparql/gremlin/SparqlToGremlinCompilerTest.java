@@ -1156,4 +1156,39 @@ public class SparqlToGremlinCompilerTest {
             assertTrue(result.get("FOE").id().equals(9) || result.get("FOE").id().equals(10));
         }
     }
+
+    @Test
+    public void testGotg_FilterOnUris_NotEquals() {
+        String query =
+            "SELECT ?HERO ?FOE " +
+                "WHERE { " +
+                "  ?HERO v:name 'hercules' . " +
+                "  ?HERO e:battled ?FOE . " +
+                "  FILTER (?FOE != vid:11) ." +
+                "}";
+
+        GraphTraversal actual = compile(gotg, query);
+
+        List<Map<String, Vertex>> resultActual = actual.toList();
+        assertEquals(2, resultActual.size());
+
+        for (Map<String, Vertex> result : resultActual) {
+            assertEquals(6, result.get("HERO").id());
+            assertTrue(result.get("FOE").id().equals(9) || result.get("FOE").id().equals(10));
+        }
+    }
+
+    @Test
+    public void testGotg_UnboundEdge_EpsPredicate_UnboundVertex() {
+        // requires lambda to reflect on traversal type in "edge-proposition-subject" case of TraversalBuilder
+        String query =
+            "SELECT ?VAR0 ?VAR1 " +
+                "WHERE { " +
+                "  ?VAR1 eps:battled ?VAR0 . " +
+                "}";
+//        GraphTraversal actual = compile(gotg, query);
+//
+//        List resultActual = actual.toList();
+//        resultActual.forEach(System.out::println);
+    }
 }
