@@ -71,6 +71,18 @@ public class Prefixes {
     }
 
     public static boolean isValidVertexIdUri(String uriStr) {
+        return isValidIdUri(uriStr, "/model/vertex-id");
+    }
+
+    public static boolean isValidEdgeIdUri(String uriStr) {
+        return isValidIdUri(uriStr, "/model/edge");
+    }
+
+    public static boolean isValidPropertyIdUri(String uriStr) {
+        return isValidIdUri(uriStr, "/model/property");
+    }
+
+    private static boolean isValidIdUri(String uriStr, String uriPath) {
         try {
             URI objectURI = new URI(uriStr);
             String objectPrefixHost = objectURI.getHost();
@@ -78,7 +90,7 @@ public class Prefixes {
 
             return
                 objectPrefixHost.equalsIgnoreCase(BASE_URI_HOST) &&
-                objectPrefixPath.equalsIgnoreCase("/model/vertex-id");
+                objectPrefixPath.equalsIgnoreCase(uriPath);
         } catch (Exception e) {
             return false;
         }
@@ -90,5 +102,9 @@ public class Prefixes {
 
     public static String createEdgeIdUri(String edgeId) {
         return BASE_URI + "edge#" + edgeId;
+    }
+
+    public static String createPropertyIdUri(String propertyId) {
+        return BASE_URI + "property#" + propertyId;
     }
 }
