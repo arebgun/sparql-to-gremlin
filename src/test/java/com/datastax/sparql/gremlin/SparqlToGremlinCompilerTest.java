@@ -21,7 +21,15 @@ package com.datastax.sparql.gremlin;
 
 import com.datastax.sparql.graph.GraphFactory;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.jena.query.ParameterizedSparqlString;
+import org.apache.jena.query.Query;
+import org.apache.jena.query.QueryFactory;
+import org.apache.jena.query.Syntax;
+import org.apache.jena.shared.PrefixMapping;
 import org.apache.jena.sparql.ARQConstants;
+import org.apache.jena.sparql.core.PathBlock;
+import org.apache.jena.sparql.syntax.ElementGroup;
+import org.apache.jena.sparql.syntax.ElementPathBlock;
 import org.apache.tinkerpop.gremlin.process.traversal.Order;
 import org.apache.tinkerpop.gremlin.process.traversal.P;
 import org.apache.tinkerpop.gremlin.process.traversal.Traversal;
@@ -31,6 +39,9 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 import org.apache.tinkerpop.gremlin.process.traversal.step.util.BulkSet;
 import org.apache.tinkerpop.gremlin.structure.Graph;
 import org.apache.tinkerpop.gremlin.structure.T;
+import org.apache.tinkerpop.gremlin.structure.Vertex;
+import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerFactory;
+import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph;
 import org.apache.tinkerpop.gremlin.util.function.Lambda;
 import org.hamcrest.core.IsCollectionContaining;
 import org.junit.Before;
@@ -61,6 +72,9 @@ public class SparqlToGremlinCompilerTest {
     public void setUp() throws Exception {
         gotg = GraphFactory.createGraphOfTheGods();
         gg = gotg.traversal();
+
+        modern = TinkerFactory.createModern();
+        mg = modern.traversal();
     }
 
     @Test
@@ -1122,181 +1136,24 @@ public class SparqlToGremlinCompilerTest {
         assertFalse(resultActual.isEmpty());
     }
 
-    /*
-    @Before
-    public void setUp() throws Exception {
-        modern = TinkerFactory.createModern();
-        mg = modern.traversal();
-        mc = modern.traversal(computer());
-        crew = TinkerFactory.createTheCrew();
-        cg = modern.traversal();
-        cc = modern.traversal(computer());
-    }
-
-    @Ignore
     @Test
-    public void play() throws IOException {
-        final String query = loadQuery("modern", 11);
-        final Traversal traversal = compile(modern, query);
-        System.out.println(traversal);
-        System.out.println(traversal.toList());
-        System.out.println(traversal);
+    public void testGotg_FilterOnUris() {
+        String query =
+            "SELECT ?HERO ?FOE " +
+            "WHERE { " +
+            "  ?HERO v:name 'hercules' . " +
+            "  ?HERO e:battled ?FOE . " +
+            "  FILTER (?FOE = vid:9 || ?FOE = vid:10) ." +
+            "}";
+
+        GraphTraversal actual = compile(gotg, query);
+
+        List<Map<String, Vertex>> resultActual = actual.toList();
+        assertEquals(2, resultActual.size());
+
+        for (Map<String, Vertex> result : resultActual) {
+            assertEquals(6, result.get("HERO").id());
+            assertTrue(result.get("FOE").id().equals(9) || result.get("FOE").id().equals(10));
+        }
     }
-
-    /* Modern */
-
-  /*  @Test
-    public void testModern1() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("a").hasLabel("person"),
-                as("a").out("knows").as("b"),
-                as("a").out("created").as("c"),
-                as("b").out("created").as("c"),
-                as("a").values("age").as("d")).where(as("d").is(lt(30))).
-                select("a", "b", "c");
-        assertEquals(expected, compile(modern, loadQuery("modern", 1)));
-    }
-
-    @Test
-    public void testModern2() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("a").hasLabel("person"),
-                as("a").out("knows").as("b"),
-                as("a").out("created").as("c"),
-                as("b").out("created").as("c"),
-                as("a").values("age").as("d")).where(as("d").is(lt(30)));
-        assertEquals(expected, compile(modern, loadQuery("modern", 2)));
-    }
-
-    @Test
-    public void testModern3() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("person").values("name").as("name"),
-                as("person").values("age").as("age")).select("name", "age");
-        assertEquals(expected, compile(modern, loadQuery("modern", 3)));
-    }
-
-    @Test
-    public void testModern4() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("person").values("name").as("name"),
-                as("person").values("age").as("age"),
-                as("person").out("created").as("project"),
-                as("project").values("name").is("lop")).select("name", "age");
-        assertEquals(expected, compile(modern, loadQuery("modern", 4)));
-    }
-
-    @Test
-    public void testModern5() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("person").values("name").as("name"),
-                as("person").values("age").is(29)).select("name");
-        assertEquals(expected, compile(modern, loadQuery("modern", 5)));
-    }
-
-    @Test
-    public void testModern6() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("person").values("name").as("name"),
-                as("person").values("age").as("age")).where(and(as("age").is(gt(30)), as("age").is(lt(40)))).
-                select("name", "age");
-        assertEquals(expected, compile(modern, loadQuery("modern", 6)));
-    }
-
-    @Test
-    public void testModern7() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("person").values("name").as("name"),
-                as("person").values("age").as("age")).where(or(as("age").is(lt(30)), as("age").is(gt(40)))).
-                select("name", "age");
-        assertEquals(expected, compile(modern, loadQuery("modern", 7)));
-    }
-
-    @Test
-    public void testModern8() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("person").values("name").as("name"),
-                as("person").values("age").as("age")).where(
-                or(and(as("age").is(gt(30)), as("age").is(lt(40))), as("name").is("marko"))).
-                select("name", "age");
-        assertEquals(expected, compile(modern, loadQuery("modern", 8)));
-    }
-
-    @Test
-    public void testModern9() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("a").values("name").as("name")).where(as("a").values("age")).
-                select("name");
-        assertEquals(expected, compile(modern, loadQuery("modern", 9)));
-    }
-
-    @Test
-    public void testModern10() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("a").values("name").as("name")).where(__.not(as("a").values("age"))).
-                select("name");
-        assertEquals(expected, compile(modern, loadQuery("modern", 10)));
-    }
-
-    @Test
-    public void testModern11() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("a").out("created").as("b"),
-                as("a").values("name").as("name")).dedup("name").select("name");
-        assertEquals(expected, compile(modern, loadQuery("modern", 11)));
-    }
-
-    @Test
-    public void testModern12() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("a").out("created").as("b"),
-                as("b").values("name").as("name")).dedup();
-        assertEquals(expected, compile(modern, loadQuery("modern", 12)));
-    }
-
-    @Test
-    public void testModern13() throws Exception {
-        final GraphTraversal expected = mg.V().match(
-                as("a").out("created").as("b"),
-                as("a").values("name").as("c")).dedup("a", "b", "c").select("a", "b", "c");
-        assertEquals(expected, compile(modern, loadQuery("modern", 13)));
-    }
-
-    /* The Crew */
-
- /*   @Test
-    public void testCrew1() throws Exception {
-        final GraphTraversal expected = cg.V().match(
-                as("a").values("name").is("daniel"),
-                as("a").properties("location").as("b"),
-                as("b").value().as("c"),
-                as("b").values("startTime").as("d")).
-                select("c", "d");
-        assertEquals(expected, compile(crew, loadQuery("crew", 1)));
-    }
-
-    /* Computer Mode */
-
-  /*  @Test
-    public void testModernInComputerMode() throws Exception {
-        final GraphTraversal expected = mc.V().match(
-                as("a").hasLabel("person"),
-                as("a").out("knows").as("b"),
-                as("a").out("created").as("c"),
-                as("b").out("created").as("c"),
-                as("a").values("age").as("d")).where(as("d").is(lt(30))).
-                select("a", "b", "c");
-        assertEquals(expected, compile(mc, loadQuery("modern", 1)));
-    }
-
-    @Test
-    public void testCrewInComputerMode() throws Exception {
-        final GraphTraversal expected = cc.V().match(
-                as("a").values("name").is("daniel"),
-                as("a").properties("location").as("b"),
-                as("b").value().as("c"),
-                as("b").values("startTime").as("d")).
-                select("c", "d");
-        assertEquals(expected, compile(crew, loadQuery("crew", 1)));
-    }*/
 }

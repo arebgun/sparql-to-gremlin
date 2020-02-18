@@ -19,6 +19,7 @@
 
 package com.datastax.sparql.gremlin;
 
+import org.apache.jena.graph.Node;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.sparql.algebra.op.OpBGP;
 import org.apache.jena.sparql.expr.E_Equals;
@@ -121,8 +122,18 @@ public class WhereTraversalBuilder {
         String arg1VarName = arg1.getVarName();
 
         if (arg2.isConstant()) {
-            Object value = arg2.getConstant().getNode().getLiteralValue();
-            return __.as(arg1VarName).is(P.eq(value));
+            Node node = arg2.getConstant().getNode();
+            if (node.isLiteral()) {
+                Object value = node.getLiteralValue();
+                return __.as(arg1VarName).is(P.eq(value));
+            } else if (node.isURI()) {
+                String uri = node.getURI();
+
+                if (Prefixes.isValidVertexIdUri(uri)) {
+                    String uriValue = Prefixes.getURIValue(uri);
+                    return __.as(arg1VarName).hasId(uriValue);
+                }
+            }
         } else if (arg2.isVariable()) {
             String arg2VarName = arg2.getVarName();
             return __.as(arg1VarName).where(arg1VarName, P.eq(arg2VarName));
@@ -131,9 +142,9 @@ public class WhereTraversalBuilder {
             NodeValue fnResult = execFunc(fn);
             Object value = fnResult.asNode().getLiteralValue();
             return __.as(arg1VarName).is(P.eq(value));
-        } else {
-            throw new IllegalStateException(String.format("Unhandled Equals expression: %s %s", arg1, arg2));
         }
+
+        throw new IllegalStateException(String.format("Unhandled Equals expression: %s %s", arg1, arg2));
     }
 
     /*
